@@ -1,0 +1,37 @@
+# Rain
+.venv/
+venv/
+.env
+.env.*
+data/
+*.db
+audit.log
+
+# Never push: source, implementation, internals
+rain/
+adom/
+services/
+core/
+tests/
+scripts/
+run.py
+Makefile
+requirements*.txt
+setup.py
+pyproject.toml
+eval_type_backport*
+docs/TEST_REGISTRY.md
+docs/PRIME_VALIDATION.md
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
