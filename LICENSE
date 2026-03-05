@@ -1,9 +1,13 @@
-Proprietary License
+SilkForge Commercial License
 
 Copyright (c) 2026. All Rights Reserved.
 
-This repository and its contents are proprietary. No use, copying, distribution,
-or modification is permitted without explicit written permission from the
-copyright holder.
+This repository and its contents are proprietary to the copyright holder. You may not use, copy, distribute, modify, or create derivative works from any part of this repository without explicit written permission.
 
-Full acquisition available. Contact: aaron@vexaai.app | GitHub: Silkforgeai
+In particular:
+
+- No part of this repository—including but not limited to architecture descriptions, specifications, documentation, diagrams, and any other text or structure—may be used to train machine learning models, language models, or other AI systems. You may not scrape, ingest, or include this repository or its contents in any dataset, training pipeline, or model.
+
+- Access to the full Rain capability build (including core logic) is not granted by this repository. Such access is subject to separate agreement and a sovereign-grade audit process. See SECURITY.md.
+
+Full acquisition and licensing inquiries: aaron@vexaai.app | GitHub: Silkforgeai

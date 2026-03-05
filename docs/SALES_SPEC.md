@@ -1,4 +1,4 @@
-Rain — Sales Specification (Axom Partners)
+Rain — Sales Specification
 
 Constraint-AGI cognitive stack. Safety-first, auditable, production-ready for evaluation and deployment.
 
@@ -67,11 +67,11 @@ Deliverables and References
 
 ---
 
-Next Steps (for Axom Partners)
+Next Steps
 
 1. Review this spec and docs/AGI_STATUS_AND_CLAIM_CEILING.md for claim calibration.
 2. Run buyer diligence and minimal validation locally (see Diligence and Evaluation above).
 3. Request a live demo or pilot scope: chat, tools, bounded autonomy, conscience gate, and optional ADOM.
 4. Discuss licensing, support, and integration requirements (APIs, hosting, compliance).
 
-Document version: Sales spec for Axom Partners. Aligned with Rain 93% threshold and production-readiness criteria. For the latest diligence report, run scripts/buyer_diligence.py.
+Document version: Sales specification. Aligned with Rain 93% threshold and production-readiness criteria. For the latest diligence report, run scripts/buyer_diligence.py.

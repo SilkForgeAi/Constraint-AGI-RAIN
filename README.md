@@ -67,7 +67,7 @@ The Sales Story
   Voice to verified audit — From human voice to speaker identification, Vocal Gate, and session recording with hash-chained proof: Rain hears it. Rain records it. Rain knows who said it. ADOM has the mirror and cryptographic binding.
   Enterprise & insurance — Session recorder with legal hold and retention; ADOM integration for independent oversight; documentation and architecture suitable for buyers and compliance officers.
 
-See docs/SALES_SPEC_AXOM_PARTNERS.md (and related docs) for partnership and deployment narrative.
+See docs/SALES_SPEC.md for sales and positioning narrative.
 
 
 Documentation
