@@ -109,5 +109,5 @@ Example Flow (Mock)
 References
 
 - Capabilities: docs/CAPABILITIES.md (compute routing section).
-- Sales: docs/SALES_SPEC_AXOM_PARTNERS.md.
+- Sales: docs/SALES_SPEC.md.
 - Claim ceiling: docs/AGI_STATUS_AND_CLAIM_CEILING.md (unchanged).
