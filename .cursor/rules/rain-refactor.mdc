@@ -1,0 +1,113 @@
+---
+description: Rain AGI architectural refactor plan — audit findings, execution order, current state
+alwaysApply: true
+---
+
+# Rain Architectural Refactor
+
+## Current State (as of March 25, 2026)
+
+- All previous patches REVERTED — Rain is back to original architecture
+- `.gitignore` updated to track `rain/`, `run.py`, `tests/`, `scripts/`, `requirements.txt`
+- **FIRST STEP**: run `git add -A && git commit -m "Baseline: Rain source tracked before refactor"` to lock in the clean state
+- Fine-tuned LoRA adapter at `~/rain-sovereign/adapters/rain-v1-best` (iter 100 checkpoint, best val loss) — NOT wired into Rain yet
+- The TEGP genesis output (`data/smoking_gun_genesis_terminal16_dark.pdf`) is Rain's best proof of capability
+
+## Codebase Stats
+
+- 145 Python files, ~16,000 lines total
+- Biggest files: `agent.py` (2,043), `run.py` (942), `grounding.py` (685), `engine.py` (661), `memory/store.py` (466), `config.py` (429), `grounding_filter.py` (328)
+
+## Audit Findings (22 items, by severity)
+
+### Critical
+
+1. **`agent.py` is a god file (2,043 lines).** One `Rain` class owns init, tool registration, prompt classification, memory assembly, two reasoning pipelines, agentic loop, metacog, grounding, side-effects.
+2. **`_reason_with_history` is a god method (~563 lines).** System prompt, multi-path reasoning, verification, epistemic gating, math checks, calibration, red-team, provenance, memory reasoning, unification — all in one function.
+3. **`think()` and `think_stream()` are copy-pasted with drift.** Key differences:
+   - `think()` includes `sovereign_td_active` in `allow_despite_low_confidence` and hallucination bypass; `think_stream()` does NOT
+   - `think()` builds richer memory context (RAG, self-model, cognitive energy budget, identity extraction, history trim); `think_stream()` skips several
+   - Any fix to one path gets forgotten in the other
+4. **No version control on source** — `rain/` was in `.gitignore` (now fixed, needs baseline commit)
+
+### High
+
+5. **`config.py` has ~120 env vars, flat namespace.** Mixed parsing, no startup validation.
+6. **`engine.py` is a god class (661 lines).** MLX + Anthropic + OpenAI + Ollama with duplicated retry loops.
+7. **Duplicated retry/error handling** across `_anthropic_complete` / `_anthropic_complete_stream` and `_ollama_complete` / `_ollama_complete_stream`.
+8. **MLX "streaming" is fake.** `_mlx_complete_stream` yields entire result as one chunk.
+9. **`_effective_provider()` is dead code** in engine.py.
+10. **`run.py` is 942 lines monolithic.** Hardcoded `max_steps=10` vs config's `AUTONOMY_MAX_STEPS`.
+
+### Medium
+
+11. **9 module-level `_is_*` predicates in `agent.py`** should be in own module.
+12. **Safety policy encoded as regex lists** — overlapping patterns across vault.py, grounding_filter.py, grounding.py.
+13. **Duplicate safety constants** across grounding.py (prompt), grounding_filter.py (output), memory/policy.py (storage).
+14. **`memory/store.py` does too much (466 lines)** — facade + policy + retrieval composition.
+15. **`grounding.py` has 18 large prompt blocks (685 lines)** — no structure.
+16. **Broad `except Exception` everywhere.**
+
+### Low
+
+17. **Unused `import json`** in engine.py.
+18. **Rough percentile calculation** in latency.py.
+19. **Incomplete confusables.py coverage.**
+20. **`_register_memory_tool` is 224 lines** of nested closures.
+21. **No startup validation** for provider dependencies.
+22. **`Rain()` constructed twice** in voice mode in run.py.
+
+## Execution Plan (priority order)
+
+### Phase 1: Foundation
+- [ ] Git baseline commit (track all source)
+- [ ] Extract `_is_*` predicates into `rain/classification.py`
+- [ ] Remove dead code (`_effective_provider`, unused imports)
+
+### Phase 2: Core Pipeline (highest impact on power + reliability)
+- [ ] Unify `think()` and `think_stream()` into shared pipeline — fix the sovereign_td drift
+- [ ] Split `_reason_with_history` into composable stages:
+  - `build_system_context()` — system prompt assembly
+  - `run_reasoning()` — multi-path / deep reasoning dispatch
+  - `verify_and_gate()` — verification, epistemic gate, math check
+  - `post_process()` — calibration, red-team, provenance, unification
+- [ ] Each stage independently testable and tunable
+
+### Phase 3: Engine & Providers
+- [ ] Split `CoreEngine` into base class + per-provider backends (MLXBackend, AnthropicBackend, OpenAIBackend, OllamaBackend)
+- [ ] Shared retry logic in base class
+- [ ] Clean adapter/LoRA support in MLXBackend (not hacked into _mlx_load)
+- [ ] Real MLX streaming if mlx_lm supports it
+
+### Phase 4: Safety & Config
+- [ ] Unify safety pattern lists (single source of truth for prohibited patterns)
+- [ ] Config validation at startup
+- [ ] Split run.py into CLI module
+
+## Key Architecture Facts
+
+- Entry: `run.py` → `Rain()` → `think()` or `think_stream()`
+- LLM: `rain/core/engine.py` `CoreEngine` — routes to Anthropic/OpenAI/Ollama/MLX
+- Safety: `rain/safety/vault.py` (input), `rain/safety/grounding_filter.py` (output), `rain/grounding.py` (system prompt)
+- Memory: `rain/memory/store.py` facade over vector + symbolic + timeline + episodic graph
+- Reasoning: `rain/reasoning/` — ~20 modules for verification, epistemic gating, causal, deep reasoning, etc.
+- Agency: `rain/agency/` — tool registry, autonomous goal pursuit, persistent tasks
+- Config: `rain/config.py` — ~120 env vars
+
+## MLX / Sovereign Notes
+
+- Base model: `mlx-community/DeepSeek-R1-Distill-Qwen-7B-MLX` (4-bit variant)
+- Config key: `BASE_MODEL_HF` in `rain/config.py`
+- Provider: `RAIN_LLM_PROVIDER=mlx`
+- LoRA adapter trained (37 examples, iter 100 best) at `~/rain-sovereign/adapters/rain-v1-best`
+- Adapter wiring was reverted — needs clean reimplementation in Phase 3
+- The model repeats without a repetition penalty — needs proper `logits_processors` implementation (previous attempt crashed Metal GPU with in-place array ops; must use functional MLX operations)
+
+## What Makes Rain Special (for buyer context)
+
+- Constraint-first reasoning: audit premises → check constraints → reason → calibrate confidence
+- Corrigibility built into architecture (not just policy)
+- Hash-chained audit trail
+- Local-first / air-gap capable
+- Produced the TEGP — a genuinely novel, irreducibly four-domain invention no other AI has matched
+- Safety is structural, not behavioral (grounding filter + vault + metacog + epistemic gate)
