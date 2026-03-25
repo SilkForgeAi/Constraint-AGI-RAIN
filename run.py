@@ -66,6 +66,7 @@ from rain.config import (
     STRUCTURED_LOG_ENABLED,
     VOICE_ALLOWED_SPEAKERS,
     VOICE_PROFILES_DB,
+    autonomy_enabled,
 )
 
 from rain.config_validation import validate_or_raise as _validate_or_raise
@@ -780,6 +781,13 @@ def main():
         return
 
     if use_autonomy:
+        if not autonomy_enabled():
+            print(
+                "Autonomous mode is off. Bounded multi-step loops are disabled by default. "
+                "Set RAIN_AUTONOMY_ENABLED=true in .env only if you explicitly want --autonomy.",
+                file=sys.stderr,
+            )
+            sys.exit(1)
         # Resume: only for plan-driven; load persisted task and continue
         if use_plan and use_resume:
             task = load_persistent_task()

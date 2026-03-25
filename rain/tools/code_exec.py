@@ -1,4 +1,4 @@
-"""Sandboxed code execution — restricted Python. Gated by RAIN_CODE_EXEC_ENABLED."""
+"""Sandboxed code execution — restricted Python. Gated by RAIN_CODE_EXEC_ENABLED (default off)."""
 
 from __future__ import annotations
 

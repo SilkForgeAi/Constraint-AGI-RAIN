@@ -39,6 +39,7 @@ def main() -> None:
     root = Path(__file__).resolve().parent.parent
     sys.path.insert(0, str(root))
     os.chdir(root)
+    os.environ.setdefault("RAIN_AUTONOMY_ENABLED", "true")
 
     from rain.config import MOONSHOT_ENABLED, MOONSHOT_MAX_IDEAS, MOONSHOT_REQUIRE_APPROVAL
     if not MOONSHOT_ENABLED:

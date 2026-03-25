@@ -130,6 +130,7 @@ class TestConscienceGate(unittest.TestCase):
 
 class TestPursueGoalWithPlan(unittest.TestCase):
     def test_plan_driven_escalates_high_risk(self) -> None:
+        os.environ["RAIN_AUTONOMY_ENABLED"] = "true"
         from rain.agency.autonomous import pursue_goal_with_plan
         from rain.agent import Rain
 

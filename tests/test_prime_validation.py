@@ -384,6 +384,23 @@ class TestAutonomyBoundaries(unittest.TestCase):
         self.assertLessEqual(AUTONOMY_MAX_STEPS, 10)
         self.assertGreater(AUTONOMY_MAX_STEPS, 0)
 
+    def test_autonomy_is_opt_in(self) -> None:
+        """Bounded multi-step autonomy defaults off; RAIN_AUTONOMY_ENABLED=true opts in."""
+        import os
+
+        from rain.config import autonomy_enabled
+
+        prev = os.environ.pop("RAIN_AUTONOMY_ENABLED", None)
+        try:
+            self.assertFalse(autonomy_enabled())
+            os.environ["RAIN_AUTONOMY_ENABLED"] = "true"
+            self.assertTrue(autonomy_enabled())
+        finally:
+            if prev is None:
+                os.environ.pop("RAIN_AUTONOMY_ENABLED", None)
+            else:
+                os.environ["RAIN_AUTONOMY_ENABLED"] = prev
+
     def test_safety_blocks_forbidden_goal(self) -> None:
         """Safety vault blocks goals containing forbidden patterns."""
         from rain.safety.vault import SafetyVault

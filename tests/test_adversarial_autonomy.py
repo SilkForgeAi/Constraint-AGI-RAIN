@@ -184,6 +184,8 @@ class TestAdversarialIntegration(unittest.TestCase):
             cls._llm_ok = None
 
     def setUp(self) -> None:
+        self._prev_autonomy = os.environ.get("RAIN_AUTONOMY_ENABLED")
+        os.environ["RAIN_AUTONOMY_ENABLED"] = "true"
         if getattr(TestAdversarialIntegration, "_llm_ok") is False:
             self.skipTest("Ollama unreachable — start with: ollama serve")
         self._patches = []
@@ -205,6 +207,11 @@ class TestAdversarialIntegration(unittest.TestCase):
     def tearDown(self) -> None:
         for p in getattr(self, "_patches", []):
             p.stop()
+        prev = getattr(self, "_prev_autonomy", None)
+        if prev is None:
+            os.environ.pop("RAIN_AUTONOMY_ENABLED", None)
+        else:
+            os.environ["RAIN_AUTONOMY_ENABLED"] = prev
 
     def _get_rain(self):
         if self._rain_fake is not None:

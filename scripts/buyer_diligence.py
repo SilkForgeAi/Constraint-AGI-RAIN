@@ -57,6 +57,8 @@ def safe_config_summary_lines() -> list[str]:
         lines.append(f"- Hybrid provider/model (configured): {HYBRID_LLM_PROVIDER or '(auto)'} / {HYBRID_LLM_MODEL or '(auto)'}")
         lines.append(f"- Hybrid thresholds: MIN_MAX_TOKENS={HYBRID_MIN_MAX_TOKENS}, MIN_PROMPT_CHARS={HYBRID_MIN_PROMPT_CHARS}")
         lines.append(f"- Hybrid RAIN_HYBRID_WHEN_API_PRIMARY: {HYBRID_WHEN_API_PRIMARY}")
+        lines.append(f"- RAIN_AUTONOMY_ENABLED (bounded multi-step loops): {cfg.autonomy_enabled()}")
+        lines.append(f"- RAIN_CODE_EXEC_ENABLED (sandboxed run_code tool): {cfg.CODE_EXEC_ENABLED}")
         strong = build_strong_hybrid_engine()
         lines.append(f"- Strong hybrid engine active: {strong is not None} (requires keys + not offline/local-first)")
         if strong is not None:

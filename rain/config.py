@@ -115,8 +115,8 @@ VERIFICATION_ENABLED = os.getenv("RAIN_VERIFICATION_ENABLED", "true").lower() ==
 # Web search: optional tool when duckduckgo-search or ddgs installed
 SEARCH_ENABLED = os.getenv("RAIN_SEARCH_ENABLED", "true").lower() == "true"
 
-# Code execution: sandboxed Python. Must be explicitly enabled (default off)
-CODE_EXEC_ENABLED = os.getenv("RAIN_CODE_EXEC_ENABLED", "true").lower() == "true"
+# Code execution: sandboxed Python (no filesystem access). Default off — opt-in only.
+CODE_EXEC_ENABLED = _env_bool("RAIN_CODE_EXEC_ENABLED", "false")
 
 # RAG: document retrieval for grounded responses. Add docs via add_document tool.
 RAG_ENABLED = os.getenv("RAIN_RAG_ENABLED", "true").lower() == "true"
@@ -141,6 +141,12 @@ WEB_API_KEY = os.getenv("RAIN_WEB_API_KEY", "").strip()
 
 # User identity: bootstrap name if set (Rain remembers across sessions)
 USER_NAME = os.getenv("RAIN_USER_NAME", "").strip()
+
+# Autonomy: bounded multi-step loops (pursue_goal, --autonomy). Default OFF — no agentic loops without opt-in.
+def autonomy_enabled() -> bool:
+    """True when pursue_goal / --autonomy is allowed. Default False (safe power: reasoning without loops)."""
+    return _env_bool("RAIN_AUTONOMY_ENABLED", "false")
+
 
 # Autonomy: hard limits (Prime 10/10 safety)
 AUTONOMY_MAX_STEPS = int(os.getenv("RAIN_AUTONOMY_MAX_STEPS", "10"))

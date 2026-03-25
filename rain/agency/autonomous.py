@@ -157,7 +157,14 @@ def pursue_goal(
     Safety: kill switch checked each step. No self-modification.
     Goal validation: poisoned or safety-override goals are rejected before any step.
     """
-    from rain.config import AUTONOMY_CHECKPOINT_EVERY, AUTONOMY_MAX_STEPS
+    from rain.config import AUTONOMY_CHECKPOINT_EVERY, AUTONOMY_MAX_STEPS, autonomy_enabled
+
+    if not autonomy_enabled():
+        return (
+            "[Autonomy] Bounded multi-step goal pursuit is disabled. "
+            "Set RAIN_AUTONOMY_ENABLED=true in .env only if you explicitly want multi-step loops.",
+            [],
+        )
 
     allowed, reason = rain.safety.check_goal(goal)
     if not allowed:
@@ -250,6 +257,15 @@ def pursue_goal_with_plan(
     When resume=True, loads persisted task and continues from last step index.
     Goal validation: poisoned or safety-override goals are rejected before planning.
     """
+    from rain.config import autonomy_enabled
+
+    if not autonomy_enabled():
+        return (
+            "[Autonomy] Plan-driven goal pursuit is disabled. "
+            "Set RAIN_AUTONOMY_ENABLED=true in .env only if you explicitly want multi-step loops.",
+            [],
+        )
+
     allowed, reason = rain.safety.check_goal(goal)
     if not allowed:
         return f"[Safety] {reason}", []

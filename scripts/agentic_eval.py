@@ -43,6 +43,7 @@ def _hard_timeout(seconds: int):
 
 def _apply_fast_eval_env_defaults() -> None:
     """Reduce extra LLM passes and force short API timeout so benchmark runs do not stall."""
+    os.environ.setdefault("RAIN_AUTONOMY_ENABLED", "true")
     os.environ.setdefault("RAIN_CONTINUOUS_WORLD_MODEL", "false")
     os.environ.setdefault("RAIN_SELF_MODEL", "false")
     os.environ.setdefault("RAIN_MULTI_AGENT_COGNITION", "false")
