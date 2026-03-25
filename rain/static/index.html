@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Rain</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      background: #0d1117;
+      color: #e6edf3;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 1rem;
+    }
+    h1 {
+      font-size: 1.25rem;
+      font-weight: 400;
+      margin-bottom: 1rem;
+      color: #8b949e;
+    }
+    #chat {
+      width: 100%;
+      max-width: 48rem;
+      flex: 1;
+      overflow-y: auto;
+      margin-bottom: 1rem;
+      padding: 1rem;
+      background: #161b22;
+      border-radius: 8px;
+      border: 1px solid #30363d;
+      min-height: 20rem;
+    }
+    .msg {
+      margin-bottom: 1rem;
+      padding: 0.75rem 1rem;
+      border-radius: 6px;
+      line-height: 1.5;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .msg.user {
+      background: #21262d;
+      border-left: 3px solid #58a6ff;
+      margin-left: 0;
+      margin-right: 2rem;
+    }
+    .msg.rain {
+      background: #161b22;
+      border-left: 3px solid #3fb950;
+      margin-left: 2rem;
+      margin-right: 0;
+    }
+    .msg .role {
+      font-size: 0.7rem;
+      color: #8b949e;
+      margin-bottom: 0.25rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    #form {
+      width: 100%;
+      max-width: 48rem;
+      display: flex;
+      gap: 0.5rem;
+    }
+    #input {
+      flex: 1;
+      padding: 0.75rem 1rem;
+      font: inherit;
+      font-size: 0.9rem;
+      background: #21262d;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      color: #e6edf3;
+      resize: none;
+      min-height: 2.75rem;
+      max-height: 8rem;
+    }
+    #input:focus {
+      outline: none;
+      border-color: #58a6ff;
+    }
+    #input::placeholder {
+      color: #6e7681;
+    }
+    button {
+      padding: 0 1.25rem;
+      font: inherit;
+      font-size: 0.9rem;
+      background: #238636;
+      border: none;
+      border-radius: 6px;
+      color: white;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    button:hover {
+      background: #2ea043;
+    }
+    button:disabled {
+      background: #21262d;
+      color: #6e7681;
+      cursor: not-allowed;
+    }
+    .thinking {
+      color: #8b949e;
+      font-size: 0.85rem;
+      padding: 0.5rem 0;
+    }
+    .options {
+      display: flex;
+      gap: 1.5rem;
+      margin-bottom: 0.75rem;
+      font-size: 0.85rem;
+      color: #8b949e;
+    }
+    .options label { display: flex; align-items: center; gap: 0.35rem; cursor: pointer; }
+    .options input[type="checkbox"] { accent-color: #58a6ff; }
+    #apiKey {
+      width: 10rem;
+      padding: 0.25rem 0.5rem;
+      font-size: 0.8rem;
+      background: #21262d;
+      border: 1px solid #30363d;
+      border-radius: 4px;
+      color: #e6edf3;
+    }
+    #apiKey::placeholder { color: #6e7681; }
+  </style>
+</head>
+<body>
+  <h1>Rain — AGI Cognitive Stack</h1>
+  <div class="options">
+    <label><input type="checkbox" id="useMemory"> Long-term memory</label>
+    <label><input type="checkbox" id="useTools"> Tools (calc, time, remember)</label>
+    <span class="api-key-wrap">
+      <input type="password" id="apiKey" placeholder="API key (if required)" autocomplete="off">
+    </span>
+  </div>
+  <div id="chat"></div>
+  <form id="form">
+    <textarea id="input" placeholder="Message Rain..." rows="1"></textarea>
+    <button type="submit" id="send">Send</button>
+  </form>
+
+  <script>
+    const chat = document.getElementById('chat');
+    const form = document.getElementById('form');
+    const input = document.getElementById('input');
+    const send = document.getElementById('send');
+
+    let history = [];
+    const apiKeyInput = document.getElementById('apiKey');
+    apiKeyInput.value = localStorage.getItem('rain_api_key') || '';
+    apiKeyInput.addEventListener('change', () => localStorage.setItem('rain_api_key', apiKeyInput.value));
+
+    function addMsg(role, content) {
+      const div = document.createElement('div');
+      div.className = 'msg ' + role;
+      const roleSpan = document.createElement('div');
+      roleSpan.className = 'role';
+      roleSpan.textContent = role === 'user' ? 'You' : 'Rain';
+      const text = document.createElement('div');
+      text.textContent = content;
+      div.appendChild(roleSpan);
+      div.appendChild(text);
+      chat.appendChild(div);
+      chat.scrollTop = chat.scrollHeight;
+    }
+
+    function setThinking(on) {
+      let el = document.getElementById('thinking');
+      if (on) {
+        if (!el) {
+          el = document.createElement('div');
+          el.id = 'thinking';
+          el.className = 'thinking';
+          chat.appendChild(el);
+        }
+        el.textContent = 'Thinking... (15–60 sec on Ollama)';
+        chat.scrollTop = chat.scrollHeight;
+      } else if (el) {
+        el.remove();
+      }
+    }
+
+    form.onsubmit = async (e) => {
+      e.preventDefault();
+      const msg = input.value.trim();
+      if (!msg) return;
+      input.value = '';
+      send.disabled = true;
+
+      addMsg('user', msg);
+      setThinking(true);
+
+      try {
+        const useMemory = document.getElementById('useMemory').checked;
+        const useTools = document.getElementById('useTools').checked;
+        const headers = { 'Content-Type': 'application/json' };
+        const key = apiKeyInput.value.trim();
+        if (key) { headers['X-API-Key'] = key; localStorage.setItem('rain_api_key', key); }
+        const res = await fetch('/chat', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ message: msg, history, use_memory: useMemory, use_tools: useTools }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Request failed');
+        addMsg('rain', data.response);
+        history = data.history;
+      } catch (err) {
+        addMsg('rain', 'Error: ' + err.message);
+      }
+      setThinking(false);
+      send.disabled = false;
+    };
+
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        form.requestSubmit();
+      }
+    });
+  </script>
+</body>
+</html>

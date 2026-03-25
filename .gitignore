@@ -1,5 +1,5 @@
 # Rain
-.venv/
+.venv*/
 venv/
 .env
 .env.*
@@ -8,16 +8,11 @@ data/
 audit.log
 logs/
 
-# Never push: source, implementation, internals
-rain/
+# Never push: internal services, build artifacts
 adom/
 services/
 core/
-tests/
-scripts/
-run.py
 Makefile
-requirements*.txt
 setup.py
 pyproject.toml
 eval_type_backport*
