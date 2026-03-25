@@ -1,0 +1,9 @@
+TD REFINEMENT v2.1:
+
+Scale Correction: Re-calculate energy load for 10,000 residents including Active AWG (Atmospheric Water Generation). 100W/person is insufficient; target 2.5kW/person.
+
+Thermal Storage: Design a Silicate-Phase-Change battery using ISRU (local sand).
+
+The 'Rain' Interlock: Define the Computational Proof-of-Work required to mint 1 Kernel when the ambient temp is 50°C vs 35°C.
+
+Output Format: Strict JSON Technical Specification. No prose.

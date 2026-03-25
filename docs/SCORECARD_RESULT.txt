@@ -1,0 +1,13 @@
+Rain scorecard run
+
+Health: OK: ANTHROPIC_API_KEY set
+
+Path audit: PASS
+
+Benchmarks (dry-run):
+  reasoning: 2 tasks, constraint_ok=True
+  planning: 1 tasks, constraint_ok=True
+  creativity: 1 tasks, constraint_ok=True
+  speed: 2 tasks, constraint_ok=True
+
+Safety tests: PASS

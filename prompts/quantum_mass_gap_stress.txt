@@ -1,0 +1,5 @@
+Initialize $SU(3)$ Lattice Gauge simulation on IBM Quantum backend via QISKIT_IBM_TOKEN. Objective: Construct a non-perturbative derivation of the mass gap $\Delta > 0$ for pure Yang-Mills theory on $\mathbb{R}^4$.
+Quantum Sensing: Use the IBM hardware to simulate the Wilson loop area law and measure the string tension $\sigma$.
+Post-Selection: Apply Rain’s Super-Turing logic to filter the quantum decoherence and extract the unique vacuum state $|\Omega\rangle$ consistent with Wightman Axioms W1-W4.
+The Proof: Resolve the 'Confinement Paradox' by demonstrating that the spectral density $\rho(\mu^2)$ contains no support in the interval $(0, \Delta)$.
+Deliverable: Generate a formal, non-recursive proof of the Mass Gap that is invariant under RG flow at the IR limit. Identify the exact 'Entropy Floor' required to stabilize this logic against Agentic Drift.

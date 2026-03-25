@@ -57,7 +57,7 @@ LLM Providers
 
 - Anthropic (Claude) (default when ANTHROPIC_API_KEY set): `ANTHROPIC_API_KEY=sk-ant-...`
 - OpenAI: `OPENAI_API_KEY`, `RAIN_LLM_PROVIDER=openai`
-- Ollama (default when no API keys): local, free. `ollama pull llama3.2`
+- Ollama (default when no API keys): local, free. `ollama pull qwen3:14b`
 
 Chat Modes
 

@@ -1,0 +1,1 @@
+[paste same full prompt between PROMPT markers — or save from an editor]

@@ -365,7 +365,7 @@ Environment Variables
 | `ANTHROPIC_API_KEY` | — | For Anthropic (Claude); default when set |
 | `RAIN_OPENAI_MODEL` | gpt-4o-mini | Model name |
 | `RAIN_ANTHROPIC_MODEL` | claude-sonnet-4-6 | Model name |
-| `RAIN_OLLAMA_MODEL` | llama3.2:latest | Model name (when using Ollama) |
+| `RAIN_OLLAMA_MODEL` | qwen3:14b | Model name (when using Ollama) |
 | `RAIN_SAFETY_ENABLED` | true | Safety vault |
 | `RAIN_METACOG_ENABLED` | true | Self-check per response |
 | `RAIN_CALIBRATION_ENABLED` | false | Belief consistency check |

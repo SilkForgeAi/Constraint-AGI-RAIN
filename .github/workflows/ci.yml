@@ -1,0 +1,24 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  schedule:
+    # Weekly drift check (optional; requires API key in secrets)
+    - cron: "0 2 * * 0"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.9"
+      - run: pip install -r requirements.txt
+      - run: make test-fast
+        name: Fast tests (includes namespace isolation)
+      - run: python scripts/run_validation.py --minimal --report
+        name: Minimal validation (production gate)

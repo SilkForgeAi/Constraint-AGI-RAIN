@@ -62,7 +62,7 @@ Deployment
 Deliverables and References
 
 - Codebase: Full Rain stack (core, memory, agency, planning, world model, routing, governance, safety).
-- Docs: README.md (quick start, commands, tests), RAIN_SPEC.md (full spec), CAPABILITIES.md (93% checklist, world model 10/10), QPU_ROUTER_AND_QAOA_PLANNER.md (hybrid supercomputing design and commercial rationale), AGI_STATUS_AND_CLAIM_CEILING.md (claim ceiling), PRODUCTION_READINESS.md, TEST_REGISTRY.md, DEPLOYMENT.md, ADOM_STEALTH_INTEGRATION.md.
+- Docs: README.md (quick start, commands, tests), FULL_SPEC_AND_CAPABILITY.md (full spec, detail, and how powerful Rain is), RAIN_SPEC.md (compact spec), CAPABILITIES.md (93% checklist, world model 10/10), QPU_ROUTER_AND_QAOA_PLANNER.md (hybrid supercomputing design and commercial rationale), AGI_STATUS_AND_CLAIM_CEILING.md (claim ceiling), PRODUCTION_READINESS.md, TEST_REGISTRY.md, DEPLOYMENT.md, ADOM_STEALTH_INTEGRATION.md.
 - Scripts: buyer_diligence.py (report), run_validation.py (minimal/fast/full), memory_audit.py, drift_check.py.
 
 ---

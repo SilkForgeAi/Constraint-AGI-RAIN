@@ -98,7 +98,7 @@ data/
 | ANTHROPIC_API_KEY | — | Anthropic (default when set). |
 | RAIN_OPENAI_MODEL | gpt-4o-mini | OpenAI model. |
 | RAIN_ANTHROPIC_MODEL | claude-opus-4-6 | Anthropic model. |
-| RAIN_OLLAMA_MODEL | llama3.2:latest | Ollama model. |
+| RAIN_OLLAMA_MODEL | qwen3:14b | Ollama model (~9GB Q4). |
 | RAIN_OLLAMA_BASE_URL | http://127.0.0.1:11434/v1 | Ollama base. |
 | Safety | | |
 | RAIN_SAFETY_ENABLED | true | If false, vault allows all. |
@@ -300,7 +300,8 @@ Tests used (no ChromaDB, no LLM): `tests.test_capabilities_diligence`, `tests.te
 | Doc | Content |
 |-----|---------|
 | README.md | Quick start, features, commands. |
-| docs/RAIN_SPEC.md | This document — full spec; includes buyer diligence (section 12). |
+| docs/FULL_SPEC_AND_CAPABILITY.md | Full spec, detail, and how powerful Rain is (single long-form reference). |
+| docs/RAIN_SPEC.md | This document — compact full spec; includes buyer diligence (section 12). |
 | docs/ARCHITECTURE.md | Stack, modules, data layout. |
 | docs/RESTRICTIONS.md | Every restriction (vault, grounding, gates, autonomy, files, URL, code, memory, metacog, tools). |
 | docs/CAPABILITIES.md | Nine capability areas, build 93% checklist. |

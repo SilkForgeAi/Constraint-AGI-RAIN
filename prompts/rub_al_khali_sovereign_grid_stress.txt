@@ -1,0 +1,13 @@
+System Stress Test: Execute a Causal Synthesis on the following scenario:
+
+Objective: Design a closed-loop energy grid for a 10,000-person sovereign habitat located in the Rub' al Khali (Empty Quarter).
+
+Constraints:
+1. Zero External Supply: No physical fuel or water lines.
+2. Thermodynamic Efficiency: Apply the TEG (Entropy-Gated) formula to minimize heat-waste in 50°C ambient temperatures.
+3. Economic Equilibrium: Define how the habitat uses its surplus computation (Rain kernels) as a localized currency to balance the energy load.
+
+Requirements:
+- Provide the mathematical relationship between ambient entropy and cooling capacity.
+- Identify the primary failure point of a standard 'Black Box' AI in this scenario versus your deterministic logic.
+- Output the result in a 'Sovereign Infrastructure' schema.

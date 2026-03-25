@@ -1,0 +1,3895 @@
+Wilson Loops and Area Laws in Lattice Gauge Theory Tensor Networks
+Erez Zohar 1
+1Racah Institute of Physics, The Hebrew University of Jerusalem, Jerusalem 91904, Givat Ram, Israel.
+(Dated: December 20, 2021)
+Tensor network states have been a very prominent tool for the study of quantum many-body
+physics, thanks to their physically relevant entanglement properties and their ability to encode
+symmetries. In the last few years, the formalism has been extended and applied to theories with
+local symmetries too - lattice gauge theories. In order to extract physical properties (such as
+expectation values and correlation functions of physical observables) out of such states, one has
+to use the so called transfer operators, whose local properties dictate the long-range behaviour of
+the state. In this work we study transfer operators of tensor network states (in particular, PEPS
+- projected entangled pair states) of lattice gauge theories, and consider the implications of the
+local symmetry on their structure and properties. In particular, we study the implications on
+the computation of the Wilson loop - a nonlocal, gauge-invariant observable which is central to
+pure gauge theories, whose long range decay behaviour probes the conﬁnement or deconﬁnement of
+static charges. Using the symmetry, we show how to simplify the tensor contraction required for
+computing Wilson loop expectation values for such states, eliminate non-physical parts of the tensors
+and formulate conditions relating local properties (that is, of the tensors) to its decay fashion.
+I. INTRODUCTION
+In recent years, tensor network states [1] have been
+a very prominent tool, rooted in quantum information
+science, for the study of quantum many body systems
+and especially strongly correlated physics. In particu-
+lar, Matrix Product States (MPS) [2, 3] enable to study
+numerically and analytically physically relevant states,
+e.g. ground states of local many body Hamiltonians (that
+is, states exhibiting an entanglement entropy area law).
+In higher spatial dimensions, MPS generalize to PEPS -
+Projected Entangled Pair States [3, 4]. These are useful
+for the description of strongly correlated physics in two
+spatial dimensions and more.
+PEPS (and MPS) are constructed out of the contrac-
+tion of local building blocks (tensors). They satisfy, by
+construction, the entanglement entropy area law (focus-
+ing on the physically relevant part of the Hilbert space)
+and allows the state to depend on very few local parame-
+ters and hence making it feasible for computations (com-
+pared with arbitrary states in the exponentially large
+Hilbert space). Furthermore, it also allows one to en-
+code symmetries already on the single tensor level. By
+properly parametrizing the local tensors, a global sym-
+metry of the whole PEPS under a symmetry group can
+be imposed [5, 6]. This way, one can generate families of
+ansatz states in which the symmetry group of the studied
+model is encoded by construction.
+While originally used mostly in the context of con-
+densed matter physics, MPS and PEPS have recently
+been extended to the study of particle physics too - in
+particular, to lattice gauge theories, aiming at solving
+long standing open, non-perturbative questions of the
+standard model, such as the conﬁnement of quarks [7].
+Due to its running coupling [8] Quantum Chromodynam-
+ics (QCD) which allows one to use perturbation theory in
+high energy scales (collider physics) thanks to asymptotic
+freedom, is strongly interacting in low energies, prevent-
+ing the use of perturbative methods. Lattice Gauge The-
+ories (LGTs) [7] have been introduced to overcome this
+diﬃculty, ﬁrst as tools for lattice regularization of gauge
+invariant ﬁeld theories. They quickly became a very
+successful numerical approach. Combined with quan-
+tum Monte Carlo it has been applied to nonperturbative
+QCD computations, such as the hadronic spectrum [9].
+However, quantum Monte Carlo does not allow for the
+direct observation of real time dynamics, and faces the
+fermionic sign problem in several important physical sce-
+narios, not allowing one to probe some of the interesting
+exotic regions of the QCD phase diagram [10], and this
+requires the use of other methods, with tensor networks
+being one such approach. The tensor network framework
+for lattice gauge theories has been rapidly growing in the
+last few years.
+For 1 + 1 d systems, MPS have already been exten-
+sively used. This does not only include abstract formal-
+istic descriptions of MPS with a local symmetry [11, 12]
+or benchmarks of models that can be treated in other
+ways, such as, but not only, the Schwinger model [13–
+20]. Successful numerical studies of lattice gauge theories
+in 1 + 1d have been carried out even in scenarios which
+face the sign problem when approached with conventional
+methods (such as real time evolution [21–23] and ﬁnite
+density [24–27]). This was done for both Abelian and
+non-Abelian models - see [28] and references therein for
+a discussion of that.
+The application of tensor networks to higher dimen-
+sional lattice gauge theories has been discussed as well
+in the last few years [29–38]. From the rather more ab-
+stract, or formalistic point of view, gauging mechanisms
+which lift globally invariant PEPS to locally invariant
+ones by adding a gauge ﬁeld and entangling it to the
+matter properly were introduced and discussed [39, 40].
+For a parallel approach in the action formalism - tensor
+ﬁeld theory - which uses tensor networks (but not tensor
+network states), see [41] and references therein.
+arXiv:2101.05289v3  [quant-ph]  17 Dec 2021
+
+2
+In this work, we will focus on a particular gaug-
+ing mechanism - the one introduced in [40] and used
+mostly with fermionic matter, for creating gauged Gaus-
+sian fermionic PEPS [31, 32]: special PEPS constructions
+which allow for the description of fermionic matter cou-
+pled to dynamical gauge ﬁelds. Their construction may
+be seen as a minimal coupling procedure on the level of
+states, which is not possible in general but could be done
+in the context of PEPS [42]. While in general numeri-
+cal computations are hard and challenging for PEPS in
+two spatial dimensions and more, it has been shown that,
+when this particular construction is used, the PEPS may
+be contracted eﬃciently (allowing one to extract physical
+information) when combining with Monte-Carlo methods
+which do not suﬀer from the sign problem [33]. Varia-
+tional Monte-Carlo then allows to ﬁnd ground states of
+lattice gauge theory Hamiltonians when such states are
+used as ansatz states, which has already been demon-
+strated and benchmarked for a pure Z3 lattice gauge the-
+ory in 2 + 1 dimensions [37].
+A question that has to be asked when a PEPS is stud-
+ied, is how physical information can be extracted from
+the contracted state - computation of expectation values
+of observables and correlation functions. Thanks to the
+special structure of MPS, one may introduce a mathe-
+matical object called transfer matrix (or operator) [43]
+to compute eﬃciently expectation values of observables
+and correlation functions. This may be extended to two
+dimensional PEPS, by ﬁrst contracting the rows, obtain-
+ing eﬀectively a chain of the rows which is an MPS, and
+considering its transfer matrix [44]. In this work, we
+will study such transfer operators of lattice gauge theory
+PEPS in two space dimensions.
+Gauge theories are special in the sense that they ex-
+hibit a local symmetry , responsible to mediating local
+interactions between the matter ﬁelds. This symmetry
+gives rise to many local constraints. All the physical
+states are invariant under gauge transformations - local
+transformations parametrized by the elements of the so-
+called gauge group . As a result, only gauge invariant
+observables and correlation functions - those which are
+invariant under local transformations - give rise to a non-
+vanishing expectation values. Thus, LGT PEPS admit
+a very special structure manifested in the local tensors
+[30, 39, 40]; in this work, we focus on the implications of
+the local symmetry on the transfer operators, and hence
+aim at using the symmetry to simplify the PEPS contrac-
+tion, focusing on pure gauge theories (that is, without
+dynamical matter).
+In such scenarios, closed ﬂux loops - usually referred
+to as the operators which create them, Wilson loops [7] -
+are perhaps the most important observables (and almost
+the only possible gauge invariant one). The decay rule
+of large Wilson loops in pure gauge theories serves as
+probes for conﬁnement of static charges: area law decay
+implies conﬁnement, while a perimeter law - a deconﬁned
+(Coulomb) phase. Conﬁnement implies a gapped, disor-
+dered phase, while deconﬁned phases are massless and
+ordered [45]. The local ingredients of the Wilson loop
+are not gauge invariant - only their combination along
+the nonlocal path preserves the symmetry. This means,
+that when computing it for a gauge invariant PEPS, the
+transfer operator formalism must be extended and mod-
+iﬁed, requiring the inclusion of various types of transfer
+matrices which construct this nonlocal observable. The
+diﬀerent building blocks will also have special properties
+[32], dictated by the special local symmetry, which will
+aﬀect the behaviour of the Wilson loop and its decay.
+In this work, we will study the properties of transfer
+operators of gauge invariant PEPS. We will see how the
+symmetry aﬀects the properties of the local tensors, and
+that thanks to it, some parts of the tensors may be ex-
+cluded and ignored when a contraction is done (e.g. when
+combined with some numerical methods). We will also
+see how that aﬀects the Wilson loop’s decay - that is,
+how local properties of the tensors dictate the decay of
+large Wilson loops.
+Note that PEPS have been previously used for the
+computation of Wilson loop expectation value in various
+cases - Z2 string nets [46, 47], as well as U(1) [31] and
+SU (2) [32] toy models; here we derive a general frame-
+work based on transfer matrix arguments and demon-
+strate with particular constructions
+We begin with brieﬂy reviewing important preliminar-
+ies from group theory and lattice gauge theory, in sec-
+tion II; move on to formulating gauge invariant PEPS
+and reviewing their symmetry properties, in section III;
+in section IV we introduce the transfer operators - after a
+brief review of their general properties, we formulate the
+ﬂux-free transfer operators for LGT PEPS, study their
+properties and use them to calculate the norm; section
+V focuses on the contraction of Wilson loop expectation
+values for LGT PEPS, studying the relevant transfer op-
+erators and deriving conditions for area and perimeter
+decay laws; ﬁnally, in section VI, we give an explicit il-
+lustration, including both analytical and numerical argu-
+ments, for a Z2 lattice gauge theory.
+Throughout this work the Einstein summation con-
+vention (on doubly repeated indices) is assumed unless
+stated otherwise; with the only exception of irreducible
+representation indices, whose summation should not be
+assumed.
+II. MATHEMATICAL AND PHYSICAL
+PRELIMINARIES
+A. Groups, transformations, representations
+Consider a group G, which is either a ﬁnite or a com-
+pact Lie one. Each group element g∈ G may be repre-
+sented by diﬀerent unitary matrices Dj (g), labelled by
+the group’s irreducible representations (irreps) j; the di-
+mension of these matrices is referred to as the irrep di-
+mension, dim (j) (e.g. 2 j + 1 for SU (2)).
+In the Hilbert space H of some quantum mechani-
+
+3
+cal theory, we would like to consider transformations
+parametrized by the elements of G. To do that, for each
+g∈ G we introduce a unitary operator θg, and deﬁne it
+by its action on a basis states of the form |jm⟩. j labels
+the irreducible representations of G and m is an index
+labelling all states within this representation - that is, all
+the states that may be mixed by the transformations θg
+that act block-diagonally on the irreps:
+θg|jm⟩ =|jm′⟩ Dj
+m′m (g) (1)
+We can hence express θg as
+θg =
+⨁
+j
+Dj
+mn (g)|jm⟩⟨ jn| (2)
+- and therefore the dimension of the irrep j, dim (j), is
+also the dimension of Hj, the Hilbert subspace spanned
+by|jm⟩, which we call a multiplet. The Hilbert space
+may be seen as a direct sum of multiplet subspaces
+H =
+⨁
+j
+Hj (3)
+In general, quantum Hilbert spaces may contain more
+than one multiplet carrying the same irreducible repre-
+sentation.
+These transformations are sometimes referred to as
+right transformations , since they mix the multiplet el-
+ements|jm⟩, when seen as the components of a dim ( j)
+dimensional vector, via right matrix multiplication, as
+shown in (1). One can also introduce the left transfor-
+mations
+˜θg|jm⟩ = Dj
+mm′ (g)|jm′⟩ (4)
+Note that the left transformations are not independent
+from the right ones: for each g ∈ G one may ﬁnd h
+such that ˜θg = θh. We introduce the left transformations
+separately nevertheless since they will be mathematically
+convenient later when the PEPS are constructed.
+When G is a compact Lie group, its elements may be
+uniquely identiﬁed in terms of group parameters or coor-
+dinates φa; then, for each irrep j,
+Dj (g) = exp
+(
+iφa (g) Tj
+a
+)
+(5)
+- the parameters φa (g) depend on the group element,
+while the generators Tj
+a depend on the representation.
+The latter form a set of matrices with dimension dim (j),
+satisfying the group’s Lie algebra
+[
+Tj
+a , Tj
+b
+]
+= ifabcTj
+c (6)
+where fabc are the group’s structure constants. One may
+also introduce the abstract generators, Ja, which are
+block diagonal in the representations,
+Ja =
+⨁
+j
+(
+Tj
+a
+)
+mn|jm⟩⟨ jn| , (7)
+satisfying the algebra
+[Ja, Jb] = ifabcJc (8)
+too.
+The states |jm⟩ are eigenstates of mutually commut-
+ing operators: the j quantum numbers(s) labelling the
+irreducible representation (and hence the multiplet) are
+eigenvalues of the Casimir operators which commute with
+all the generators; within the representation, the states
+are labelled by the eigenvalues of a maximal set of mu-
+tually commuting generators (Cartan subalgebra) - m.
+Similarly, when the group is ﬁnite, j labels the irre-
+ducible representation while the m numbers are obtained
+from the simultaneous diagonalization of a maximal set
+of commuting transformations.
+All the irreps of Abelian groups are one dimensional
+and thus no m indices are required. In the ZN case,
+the N diﬀerent irreps are labelled by the integers j =
+0, ..., N−1, which label the group elementsg = 0, ..., N−1
+too, with Dj (g) = exp
+(
+i 2π
+N jg
+)
+. In the U(1) case the
+group elements are labelled by one parameter as well,
+φ∈ [0, 2π), the representations are labelled by integers
+j∈ Z, and Dj (φ) = exp (ijφ), and Tj = j1.
+As a non-Abelian example, consider SU (2), whose ir-
+reps are labelled by j that are non-negative integers and
+half-integers. The dimension of each representation is
+dim (j) = 2 j + 1, and the 2 j + 1 within the multiplet
+are labelled by m = −j, ..., j. There are three gener-
+ators, satisfying the Lie algebra with fabc = ϵabc - the
+anti-symmetric (Levi-Civita) symbol with a, b, c = 1, 2, 3.
+The generators in this case are sometimes called the spin
+or angular momentum components, and then a, b, c =
+x, y, z. The j = 0 (trivial) representation is one di-
+mensional, with the singlet state |00⟩. The next rep-
+resentation, j = 1 /2, is two dimensional ( m = ±1/2
+), with generators proportional to the Pauli matrices,
+Tj=1/2
+a = σa/2. In this case, there is a single Casimir
+operator, J2 = JaJa, commuting with one generator at
+most (the Cartan subalgebra is of size one). Convention-
+ally it is taken to be the z or 3 component of the angular
+momentum, and thus for SU (2),
+J2|jm⟩ = j (j + 1)|jm⟩
+Jz|jm⟩ = m|jm⟩ (9)
+B. Lattice Gauge Theory Basics
+Just like gauge theories in the continuum, LGTs de-
+scribe the interaction of matter particles through gauge
+ﬁelds. In the lattice case, the matter ﬁelds reside on the
+lattice sites, while the gauge ﬁelds, mediating the inter-
+actions between matter particles, are on the links. One
+can either discretize both space and time [7], as used for
+Euclidean, Monte-Carlo computations, or discretize only
+space while keeping time continuous [48]. The latter cor-
+responds to the Hamiltonian formulation widely used in
+
+4
+the context of quantum simulation and tensor networks,
+including in this work. Since we consider Hamiltonian
+lattice gauge theory in 2 + 1 dimensions, our lattice will
+be two dimensional. As this work focuses on the pure
+gauge case and matter ﬁelds are absent, all the degrees
+of freedom will reside on the links. We will review the ba-
+sic ingredients of such models following the conventions
+of [49] and [50].
+1. Local Hilbert Spaces
+Consider a two dimensional lattice, whose sites are la-
+belled by vectors of integers x∈ Z2. ˆei denote the unit
+vectors pointing in directionsi = 1, 2, and any link is clas-
+siﬁed by two numbers, ( x, i), standing for the beginning
+of the link and the direction to which it emanates, respec-
+tively. Each link ( x, i) hosts a local gauge ﬁeld Hilbert
+spaceHgauge (x, i), which can be spanned by group el-
+ement states {|g⟩}g∈G labelled by the gauge group el-
+ements. These states form a basis of Hgauge, with the
+orthogonality relation
+⟨g′|g⟩ = δ (g′, g) , (10)
+where δ (g′, g) is the Kronecker delta if G is ﬁnite, and a
+Dirac delta distribution in the compact lie case - denoting
+the Haar measure of G by dg,
+∫
+dg′f (g′) δ (g′, g) = f (g) . (11)
+Unlike in the multiplet case, here the right and left
+transformations are independent of one another, as group
+multiplications: we introduce two sets of unitary op-
+erators, Θ g and ˜Θg, parametrized by the elements of
+the gauge group G, which implement right and left
+group multiplications (respectively) on the group element
+states,
+Θg|h⟩ =
+⏐⏐hg−1⟩
+˜Θg|h⟩ =
+⏐⏐g−1h
+⟩ (12)
+The spaceHgauge can also be spanned by the dual rep-
+resentation basis, whose states are labelled by |jmn⟩ - j
+is an irrep and m, n are identiﬁers within it. In a sense,
+using the multiplet states introduced previously,
+|jmn⟩ =|jm⟩⊗| jn⟩ (13)
+or,
+Hgauge =
+⨁
+j
+Hj⊗Hj (14)
+whereHj is the dim ( j) dimensional subspace spanned
+by the|jm⟩ multiplet states. We read this equation as
+a decomposition of the link’s Hilbert space into a direct
+sum of products of multiplets of the groups on the left
+and right of the link, sharing the same irrep. Here one
+copy of each irreducible representation is used at most;
+one in the full, Kogut-Susskind case [48], but it is also
+possible to choose (for example, for reasons of feasibil-
+ity of computation or experimental implementation) to
+truncate the sum and not include all the irreps in several
+ways [49, 51] as we will discuss later.
+In the non truncated case, using the Peter-Weyl theo-
+rem and the group’s Fourier transform [49], the transition
+between the two bases is given by
+⟨g|jmn⟩ =
+√
+dim (j)
+|G| Dj
+mn (g) (15)
+where|G| is the group’s volume. In the representation
+basis,
+Θg|jmn⟩ =|jmn′⟩ Dj
+n′n (g)
+˜Θg|jmn⟩ = Dj
+mm′ (g)|jm′n⟩ .
+(16)
+In the compact Lie group case, one can introduce two
+sets of transformation generators, left and right - La and
+Ra respectively, such that
+Θg = exp (iφa (g) Ra)
+˜Θg = exp (iφa (g) La)
+(17)
+satisfying the algebra
+[Ra, Rb] = ifabcRc
+[La, Lb] =−ifabcLc
+[Ra, Lb] = 0
+(18)
+Note that if the group is Abelian, there is no diﬀerence
+between left and right operations and the indices m, n
+do not exist. Therefore, there R = L≡ E. Thus, in
+the U(1) case, for example, we have group states labelled
+by the single compact parameter |φ⟩ and representation
+states labelled by the single integer |j⟩, related through
+the Fourier series formula
+⟨φ|j⟩ = 1√
+2π eijφ (19)
+and the representation states|j⟩ satisfy
+E|j⟩ = j|j⟩ (20)
+For ZN, similarly, we obtain the discrete Fourier series
+formula
+⟨g|j⟩ = 1√
+N
+ei2πjg/N (21)
+While in the SU (2) case, since the group is non
+Abelian, the situation is more complicated. There are
+(2j + 1)2|jmn⟩ states for each j - e.g. one singlet state
+|000⟩ for j = 0, and four j = 1/2 states,
+⏐⏐ 1
+2 ,± 1
+2 ,± 1
+2
+⟩
+. The
+group is parametrized by the three Euler angles α, β, γ,
+and
+⟨α, β, γ|jmn⟩ =
+√2j + 1
+8π2 Dj
+mn (α, β, γ) (22)
+
+5
+Figure 1. Gauge transformations act on the four links around
+a vertex with a particular set of unitary transformations
+parametrized by the same group element g∈ G.
+The Hilbert space in this case is that of a rigid rotator
+[48, 52]. The right and left operators Ra and La corre-
+spond to the generators of its rotations in the space and
+body frames of reference. These two sets of generators
+commute, and give rise to the same total angular mo-
+mentum (eigenvalue of the Casimir operator) since it is
+a rotation scalar quantity which does not depend on the
+frame of reference [53, 54]. Therefore,
+J2|jmn⟩≡ R2|jmn⟩ = L2|jmn⟩ = j (j + 1)|jmn⟩
+Lz|jmn⟩ = m|jmn⟩
+Rz|jmn⟩ = n|jmn⟩
+(23)
+2. Local Gauge Invariance
+At each site x, and for each group element g∈ G, we
+introduce the gauge transformation
+ˆΘg (x) = ˜Θg (x, 1) ˜Θg (x, 2) Θ†
+g (x− ˆe1, 1) Θ†
+g (x− ˆe1, 2)
+(24)
+which transforms all the four links intersecting at x with
+respect to the same group element - the outgoing links
+with the left transformation, and the ingoing ones with
+the inverse right one. The outgoing links, whose be-
+ginning (left) side connects to x, undergo a left rota-
+tion, while the ingoing ones, connected through their end
+(right) side to x, undergo an inverse right rotation.
+A gauge invariant state|ψ⟩ satisﬁes
+ˆΘg (x)|ψ⟩ =|ψ⟩ ∀ x∈ Z2, g∈ G (25)
+(see Fig. 1) and similarly, for a gauge invariant operator
+O,
+ˆΘg (x) O ˆΘ†
+g (x) = O ∀x∈ Z2, g∈ G (26)
+(one can extend it to the case of static charges [52] which
+we do not discuss here). In a lattice gauge theory, only
+gauge invariant states and operators are considered phys-
+ical.
+If G is a compact Lie group, we can formulate the gauge
+transformations ˆΘg (x) in terms of their generators,
+Ga (x) = La (x, 1)+La (x, 2)−Ra (x− ˆe1, 1)−Ra (x− ˆe2, 2)
+(27)
+Gauge invariance is then formulated in terms of the
+Gauss laws
+Ga (x)|ψ⟩ = 0 ∀x∈ Z2, a (28)
+(once again, excluding static charges [52]).
+We call this eigenvalue equation the Gauss law , since
+Ga (x) can clearly be seen as the divergence of electric
+ﬁelds - La and Ra - on a site. For physical states - the one
+which satisfy the local constraints (25) - the divergence
+of electric ﬁelds is zero. It is very apparent in the U(1)
+case, where it takes the explicit form
+(E (x, 1) + E (x, 2)− E (x− ˆe1, 1)− E (x− ˆe2, 2))|ψ⟩
+≡∇· E (x)|ψ⟩ = 0 ∀x∈ Z2, a
+(29)
+In non Abelian cases, the divergence involves left and
+right electric ﬁelds, which is related to the charge car-
+ried by non-Abelian gauge bosons [48] (e.g., the colour
+charged gluon vs the electric neutral photon).
+3. Wilson Loops
+Since we deal with gauge invariant states, it is expected
+that the expectation values of non gauge invariant oper-
+ators will vanish. Thus, when classifying the phases and
+behaviour of gauge theories one needs to consider only
+gauge invariant observables and correlation functions.
+One option, for compact Lie group, is to compute ex-
+pectation values of electric ﬁeld operators and functions
+thereof (and only of Casimir operators if the group is
+non-Abelian). Another possible gauge invariant observ-
+able is the loop variable, and in particular Wilson Loops
+[7].
+On the local link Hilbert spaces we introduce the group
+element operators:
+Uj
+mn =
+∫
+dgDj
+mn (g)|g⟩⟨ g| (30)
+Uj is a matrix of dimension dim ( j)× dim (j), whose
+elements are operators acting on the link’s gauge ﬁeld
+Hilbert space,Hgauge (on each link ℓ we can deﬁne such
+operators Uj
+mn (ℓ)). Even though they are Hilbert space
+operators, all the elements of Uj commute - one can see
+in the deﬁnition above that they are all diagonal in the
+same basis. The matrix elements of Uj mix with respect
+to the transformation properties of the j representation,
+ΘgUj
+mnΘ†
+g = Uj
+mn′Dj
+n′n (g)
+˜ΘgUj
+mn ˜Θ†
+g = Dj
+mm′ (g) Uj
+m′n
+(31)
+
+6
+and, in the compact Lie case,
+[
+Ra, Uj
+mn
+]
+= Uj
+mn′
+(
+Tj
+a
+)
+n′n[
+La, Uj
+mn
+]
+=
+(
+Tj
+a
+)
+mm′ Uj
+m′n
+(32)
+Let us take some closed path C on the lattice. We
+deﬁne the Wilson loop operator W (C) as the ordered
+contraction of group element operators along this closed
+path, that is
+Wj (C) = Tr
+(∏
+ℓ∈C
+Uj (ℓ)
+)
+=
+= Uj (ℓ1)m1m2 Uj (ℓ2)m2m3··· Uj (ℓL)mLm1
+(33)
+It is a trace over the product of the group element opera-
+tors U, seen as matrices, ordered along the closed pathC
+with length L (which is simply the number of links along
+the path). Depending on the orientation of the path, one
+may have to use U † instead of U, on half of the links
+along the path - those pointing leftwards or downwards
+(see Fig. 2). For simplicity, we will omit the j indices be-
+low, but obviously the same irrep must be used along the
+path, otherwise the matrix product is ill deﬁned. Con-
+sider U(1) with j = 1 as an example; there,
+W (C) = exp
+(
+i
+∑
+ℓ∈C
+φ (ℓ)
+)
+(34)
+with half of the phases with a minus sign, according to
+their orientation.
+In order to consider the action of the group element
+operators on representation states, we use the Clebsch-
+Gordan series and coeﬃcients⟨J M jm|KN⟩ [55] and ob-
+tain
+Uj
+mm′|J M M′⟩ =
+√
+dim (J)
+dim (K)⟨J M jm|KN⟩⟨ KN ′|J M′jm′⟩| KN N ′⟩
+(35)
+- that is, the action of the group element operator Uj on
+a state with representation J yields states with all rep-
+resentations which are obtained by combining j and J
+(more precisely, fusing the two irreps together). Acting
+with a loop operator hence excites the representations
+along the loop with respect to that rule. One may trun-
+cate the Hilbert space in the representation basis: as long
+as all the irreducible representations used are taken com-
+pletely and connected by nonzero Clebsch Gordan coef-
+ﬁcients when j is added, one may use (35) to deﬁne a Uj
+operator acting on that truncated space. The transfor-
+mation properties (16), (31) and (32) will still hold [49],
+which may make it convenient for some numerical ap-
+proaches (or quantum simulation implementations [56])
+but, since the group structure will be lost, the group
+element basis will no longer be deﬁned, making, in par-
+ticular, (30) and the Fourier transform (15) invalid.
+Figure 2. A Wilson loop: rectangular loop of electric ﬂux.
+On links in the positive directions (pointing rightwards and
+upwards, here on the lower and right edges of the loop) the
+group element operator U is used; on links in the negative
+directions (pointing leftwards and downwards, here on the
+left and upper edges of the loop), U † is used.
+In most cases, rectangular Wilson loops are considered.
+We denote by W (R1, R2) a rectangular loop sized R1×
+R2 (see Fig. 2). Very large Wilson loops of pure gauge
+theories are a probe for conﬁnement (or deconﬁnement)
+of static charges, as introduced by Wilson in [7] (see also
+[45, 57, 58]). In a conﬁning phase,
+− log⟨W (R1, R2)⟩∝ R1R2 (36)
+for R1, R2≫ 1 (area law), while in a deconﬁned phase
+− log⟨W (R1, R2)⟩∝ R1 + R2 (37)
+for R1, R2≫ 1 (perimeter law).
+In [59], Creutz introduced the parameter
+χ (R1, R2) =− log
+(W (R1, R2) W (R1− 1, R2− 1)
+W (R1− 1, R2) W (R1, R2− 1)
+)
+(38)
+for the detection of static charge conﬁnement. In the
+general case of
+⟨W (R1, R2)⟩ = W0e−κAR1R2−κP (R1+R2) (39)
+For large R1, R2, the area factor κA (called the string
+tension), should it exist, is the most dominant one. The
+Creutz parameter χ ﬁlters out the contributions of the
+constant prefactor W0 and the perimeter coeﬃcient κP ,
+and thus within a conﬁning phase, χ (R1, R2)→ κA > 0
+for R1, R2≫ 1, while in a deconﬁning one it converges
+to zero.
+
+7
+III. GAUGE INVARIANT PEPS
+In this work, we use the lattice gauge theory PEPS for-
+malism of [33, 40], with slightly diﬀerent notations (and
+restricted to the pure gauge case). First of all, let us
+review it.
+A. Review of the PEPS construction
+Each site x∈ Z2 of our square, periodic lattice is at
+the intersection of four legs. The outgoing ones are in
+the right and up directions, while the left and down di-
+rected legs are considered ingoing. We wish, as usual
+with PEPS, to construct a physical lattice state describ-
+ing diﬀerent physical degrees of freedom located on dif-
+ferent sites. Each such degree of freedom is described
+by a local physical Hilbert space: if we had matter, we
+would ﬁx a physical matter Hilbert space to each lattice
+site. Here, however, the gauge ﬁelds are our only physical
+degrees of freedom, and they reside on the links. Thus,
+with each lattice site x we associate two physical Hilbert
+spaces, located on the outgoing legs. We refer to them
+as the side (Hs) and top (Ht) physical Hilbert spaces.
+These are local gauge ﬁeld Hilbert spaces (note that
+the word local here has to do with being deﬁned on a sin-
+gle link, not with the gauge symmetry being local) - that
+is, either the full Hgauge spaces introduced in Eq. (14),
+or truncated versions thereof containing only some rep-
+resentations. When truncating, it is important to make
+sure that all the|jmn⟩ for an included j are present, oth-
+erwise no gauge invariance can be imposed, as explained
+above [40, 49].
+When constructing a PEPS, in order to connect the
+local physical building blocks to one physical quantum
+state, one has to introduce auxiliary or virtual degrees
+of freedom, on top of the physical ones given by the
+model we study. These are used merely for the purpose
+of contraction. On each of the four legs we introduce an
+auxiliary or virtual Hilbert space,Hr,Hu,Hl,Hd for the
+right, up, left and down going legs, respectively. They are
+spanned by group multiplet states of the form |jm⟩, as
+deﬁned in Eq. (3). One may include all such multiplets,
+truncate, or include several copies of the same multiplet,
+which allows to increase the number of variational pa-
+rameters; but once again, all the states within a multiplet
+included must be present, and the representations used
+in the physical spaces must be included (though possibly
+with a higher multiplicity). For more details about that,
+refer to [40] where the general construction of such states
+is discussed.
+On each site, we construct the physical-virtual state
+|A⟩ = Ajsmsns;jtmtnt
+jrmr;jumu;jlml;jdmd|jsmsns; jtmtnt⟩| jrmr; jumu; jlml; jdmd⟩∈H s×Ht×Hr×Hu×Hl×Hd (40)
+where the ﬁrst ket refers to the physical states and the
+second to the virtual ones (see Fig. 3). The coordinate
+x was omitted for simplicity, but the Hilbert spaces are
+all associated with particular sites and, in general, the
+tensors Ajsmsns;jtmtnt
+jrmr;jumu;jlml;jdmd may depend on the position,
+although we will focus on translationally invariant PEPS
+and thus they will be independent of x.
+To contract the PEPS, on each link we introduce the
+maximally entangled states
+|B1 (x)⟩ =
+∑
+j
+|jm⟩r,x|jm⟩l,x+ˆe1
+|B2 (x)⟩ =
+∑
+j
+|jm⟩u,x|jm⟩d,x+ˆe2
+(41)
+As usual, we construct our PEPS |ψ⟩ by projecting the
+virtual states on the legs onto the maximally entangled
+states,
+|ψ⟩ =
+⨂
+x,i
+⟨Bi (x)|
+⨂
+x
+|A (x)⟩ (42)
+Note that ⨂
+x
+|A (x)⟩ in both the physical and virtual
+spaces, while ⨂
+x,i
+⟨Bi (x)| is only virtual. Thus the result
+Figure 3. The building blocks of the PEPS: on the left, the
+site tensors A (40), with the physical legs s, t and the virtual
+ones r, u, l, d. In the middle, the link projectors, B1,2 (41),
+connecting the outgoing legs r, u with the ingoing legs l, d
+of the next sites, to the right and above respectively. On
+the right, the contracted PEPS |ψ⟩ (42), obtained after the
+projection.
+of this projection,|ψ⟩, is still a quantum state, including
+only physical degrees of freedom - the virtual, or auxiliary
+ones, are all contracted: this is the standard way to con-
+tract PEPS, and a frequently used notation. The physical
+degrees of freedom are now correlated, and in particular,
+thanks to maximally entangling nearest neighbours, this
+guarantees the entanglement entropy area law.
+One still has some freedom to choose which maximally
+entangled states to use; the ones that we picked here are
+
+8
+Figure 4. The invariance properties of the links.
+invariant under the following group transformations:
+˜θr
+g (x) θl†
+g (x + ˆe1)|B1 (x)⟩ =|B1 (x)⟩
+˜θu
+g (x) θd†
+g (x + ˆe2)|B2 (x)⟩ =|B2 (x)⟩
+(43)
+(with θg, ˜θg deﬁned in (1), (4) respectively) as depicted
+in Fig. 4. This allows to construct states with a global
+or local symmetry, as we shall now see.
+B. Imposing the local symmetry
+We want our PEPS |ψ⟩ (42) to be gauge invariant as
+in (25) with respect to the local gauge transformations
+deﬁned in (24). If the local physical-virtual states on
+each site satisfy ([40])
+˜Θs
+g (x) ˜Θt
+g (x)|A (x)⟩ = θl
+g (x) θd
+g (x)|A (x)⟩ ,
+Θs
+g (x)|A (x)⟩ = ˜θr
+g (x)|A (x)⟩ ,
+Θt
+g (x)|A (x)⟩ = ˜θu
+g (x)|A (x)⟩ ∀ g∈ G
+(44)
+where the physical Hilbert spaces are transformed using
+Θ, ˜Θ deﬁned in (16), and the virtual ones using Θ , ˜Θ
+deﬁned in (1) and (4) respectively; see Fig. 5. Using
+the transformation properties of the maximally entangled
+states (43) one obtains that |ψ⟩ is gauge invariant.
+In order to get a more intuitive picture of the sym-
+metry conditions (44), let us consider the compact Lie
+group case again. Omitting the coordinate, since we deal
+we a single coordinate x, let us denote the right and left
+generators of the physical degrees of freedom by Rs/t
+a and
+Ls/t
+a . For the virtual degrees of freedom we can also de-
+ﬁne such operators, but in their case note that they do
+not commute, since they do not act on separate degrees of
+freedom (|jm⟩ states, unlike the physical |jmn⟩ states).
+The conditions (44) can be expressed, using these nota-
+tions, as Gauss laws:
+(
+Ls
+a + Lt
+a
+)
+|A⟩ =
+(
+Rl
+a + Rd
+a
+)
+|A⟩ ,
+Rs
+a|A⟩ = Lr
+a|A⟩ ,
+Rt
+a|A⟩ = Lu
+a|A⟩ ∀ a
+(45)
+The ﬁrst condition looks like the familiar physical
+Gauss law. It implies that the two ingoing repre-
+sentations of the virtual indices must combine to the
+same representation to which the two physical rep-
+resentations combine: js⊗ jt ∼ jl⊗ jd . There-
+fore, the tensor Ajsmsns;jtmtnt
+jrmr;jumu;jlml;jdmd should be propor-
+tional to the appropriate Clebsch-Gordan coeﬃcients,
+⟨jlmljdmd|j1m1⟩⟨ j1m1|jsmsjtmt⟩.
+The other two conditions, are diﬀerent identifying the
+right constituents of the physical degrees of freedom with
+the virtual states on the same legs. This implies thatjr =
+js, ju = jt, mr = ns and mu = nt; Ajsmsns;jtmtnt
+jrmr;jumu;jlml;jdmd
+must be proportional to δjsjr δjtjt δns,mr δnt,mu. Combin-
+ing the ﬁrst condition with the other two, we can ob-
+tain a condition on the four virtual legs: the elements of
+Ajsmsns;jtmtnt
+jrmr;jumu;jlml;jdmd must vanish, unless
+jr⊗ ju∼ jl⊗ jd. (46)
+Examples for constructions satisfying that have been
+previously given [31, 32, 40, 42]; let us just brieﬂy com-
+ment on some special cases. When the group is Abelian,
+only the irrep indices remain and the Clebsch-Gordan
+coeﬃcients are simply Kronecker deltas. One can then
+formulate jr⊗ju∼ jl⊗jd in a very simple way. ForU(1),
+for example, ⟨j1j2|J⟩ = δj1+j2,J, and the ZN is the ap-
+propriate modular modiﬁcation,⟨j1j2|J⟩ = δj1+j2,JmodN.
+We thus obtain, in the U(1) case, only tensor ele-
+ments for which jr + ju− jl− jd = 0 may be nonzero
+(jr + ju− jl− jd = N Z for ZN).
+The same applies to non-Abelian groups as well, but
+since physical states contain the (generally diﬀerent)m, n
+quantum numbers it is less simple. For SU (2), e.g., if we
+choose to include only the j = 0, 1/2 representations, the
+only non-vanishing tensor elements will be those with an
+even number of virtual legs (ingoing or outgoing) with
+j = 1/2, such that a singlet can be formed by combining
+the contributions of all four legs.
+The only freedom left in the deﬁnition of
+Ajsmsns;jtmtnt
+jrmr;jumu;jlml;jdmd is to introduce some parame-
+ters fj
+jr,ju,jl,jd which only depend on the representations,
+and we obtain [40]:
+Ajsmsns;jtmtnt
+jrmr;jumu;jlml;jdmd =
+∑
+j
+fj
+jr,ju,jl,jd⟨jlmljdmd|jm⟩⟨ jm|jsmsjtmt⟩ δjsjr δjtjt δns,mr δnt,mu (47)
+In the following, we will focus on PEPS satisfying the above symmetry properties, with no more than one copy
+
+9
+Figure 5. The invariance properties of the tensors (44), allowing for a physical local (gauge) symmetry.
+of each irrep in the virtual spaces. This may seem re-
+strictive when attempting to apply the states to real,
+physically relevant Hamiltonians; here, however, we wish
+to consider the most minimal constructions which cap-
+ture the relevant symmetry properties, allowing us to
+demonstrate our claims and results as accurately as possi-
+ble. When applied to Hamiltonians as variational ansatz
+states the states may have to be generalized indeed but
+in a straight forward way that does not aﬀect the proper-
+ties we discuss here. For example, as was demonstrated
+already in the Z3 case [37], several copies of the virtual
+representations are required in order to use such PEPS
+in order to variationally ﬁnd the ground states of the Z3
+Hamiltonian.
+One could also consider a more general PEPS con-
+struction, in which such properties are only satisﬁed after
+blocking, for eﬀective sites and eﬀective links. The sym-
+metry conditions described above will hold in this case
+too - for the blocked tensor network, rather than the
+original, microscopic” one, and thus what we study here
+could easily be applied to such cases too. A more general
+scenario would be with local MPO symmetries [4], but
+this is out of the scope of this work and requires its own,
+separate discussion.
+C. Tensor notation
+The projection (42) which generates the PEPS|ψ⟩ can
+simply be seen as a set of contraction rules for the virtual
+indices of the tensors Ajsmsns;jtmtnt
+jrmr;jumu;jlml;jdmd, associating
+the indices of r at x with those of l at x + ˆe1, as well as
+u at x with d at x + ˆe2. Hence instead of looking at the
+local states |A⟩ and their projection onto the link stats
+|Bi (x)⟩, we may use, as our basic local building block,
+A = As1s2;t1t2
+ruld |l⟩⟨ r|⊗| d⟩⟨ u|| s1s2t1t2⟩ (48)
+where, for the sake of notation simplicity, r ≡
+{jr, mr},u ≡ {ju, mu},l ≡ {jl, ml},d ≡ {jd, md},s1 ≡
+{js, ms},s2 ≡ {js, ns}, t1 ≡ {jt, mt},t2 ≡ {jt, nt} and
+As1s2;t1t2
+ruld ≡ Ajsmsns;jtmtnt
+jrmr;jumu;jlml;jdmd. In (48) the virtual
+states and their projection are replaced by the matrix
+products of |l⟩⟨ r| along horizontal lines (with the posi-
+tive direction from the left to the right) and|d⟩⟨ u| on the
+vertical lines (positive direction - upwards). This sets the
+contraction rules of the tensors As1s2;t1t2
+ruld .
+To illustrate, let us reduce to one space dimension and
+one dimensional PEPS - an MPS [43]. Each local tensor
+along the one dimensional system includes one physical
+leg, spanned by states |p⟩, and two virtual ones, on the
+left and right direction. The state is thus parametrized by
+the tensors Ap
+lr, and their contraction is simply a matrix
+multiplication of the virtual indices along the system. For
+a periodic system withN sites (the modiﬁcation for open
+boundaries is straightforward) the state takes the form
+|ψ0⟩ = Tr [Ap1 Ap2··· ApN ]|p1, p2, ..., pN⟩
+=
+ |p1, p2, ..., pN⟩ (49)
+The PEPS contraction rules in two space dimensions are
+simply a two dimensional generalization of the trace con-
+traction in the one dimensional case.
+The symmetry conditions (44) may also be expressed
+as properties of the tensor Ajsmsns;jtmtnt
+jrmr;jumu;jlml;jdmd. For
+that, we introduce the (reducible) representation matri-
+cesD (g) which are direct sums of the irreducible uni-
+taries Dj (g); using them, the symmetry condition (44)
+may be reformulated as
+As′
+1s2;t′
+1t2
+ruld Ds′
+1s1 (g)Dt′
+1t1 (g) =Dll′ (g)Ddd′ (g) As1s2;t1t2
+rul′d′
+Ds2s′
+2 (g) As1s′
+2;t1t2
+ruld = As1s2;t1t2
+r′uld Dr′r (g)
+Dt2t′
+2 (g) As1s2;t′
+1t2
+ruld = As1s2;t1t2
+ru′ld Du′u (g) ∀g∈ G
+(50)
+IV. TRANSFER OPERATORS AND NORMS OF
+PEPS
+Before turning to the study of the transfer operator of
+our gauge invariant PEPS, let us recall what the trans-
+fer operator of a PEPS is. First, we brieﬂy review the
+one dimensional, MPS case [43]. We strictly focus on the
+translationally invariant case, since this work is aimed
+at translational invariant systems; however, the general
+transfer matrix discussion may be (and has been) gener-
+alized to the non-translationally invariant case.
+
+10
+A. Brief review of MPS transfer matrices
+The transfer matrix of the MPS |ψ0⟩ from (49) is de-
+ﬁned as
+Ell′,rr′ = Trphys
+[
+Ap
+lr|p⟩⟨ p′| ¯Ap′
+l′r′
+]
+= Ap
+lr ¯Ap
+l′r′ =
+(51)
+- it is a matrix with double valued indices, ll′ to the left
+and rr′ to the right. Thus, if l, r take D values each (i.e.
+the virtual Hilbert spaces used for contracting the MPS
+are D dimensional), E is a D2× D2 matrix, acting on
+the D2 space formed by the product of two copies if the
+virtual Hilbert space. Using E, we can ﬁrst write down
+the norm of the state,
+⟨ψ0|ψ0⟩ = Tr
+[
+EN ]
+=
+ (52)
+For the computation of an expectation value of some
+operator O at site x, we will need to deﬁne
+(EO)ll′,rr′ = Trphys
+[
+Ap
+lrO|p⟩⟨ p′| ¯Ap′
+l′r′
+]
+=
+∑
+p,p′
+Ap
+lr ¯Ap′
+l′r′⟨p′| O|p⟩ =
+ (53)
+using which we may write
+⟨O (x)⟩ =⟨ψ0| O (x)|ψ0⟩
+⟨ψ0|ψ0⟩ = Tr
+[
+EOEN −1]
+Tr [EN ] =
+ (54)
+Suppose we wish to compute the two-point correlator of O1 (x1) and O2 (x2) (assuming for simplicity that x2− x1 =
+R > 0),
+F (x1, x2) =⟨O1 (x1) O2 (x2)⟩−⟨ O1 (x1)⟩⟨ O2 (x2)⟩ = Tr
+[
+EO1 ER−1EO2 EN −R−1]
+Tr [EN ] − Tr
+[
+EO1 EN −1]
+Tr
+[
+EO2 EN −1]
+Tr2 [EN ]
+=
+ −
+×
+
+
+
+
+2
+(55)
+We introduce the left and right eigenvectors of E,
+⟨wi| E =⟨wi| ρi and E|vi⟩ = ρi|vi⟩, sharing the same
+eigenvalues ρi and satisfying the orthonormality relation
+⟨wi|vj⟩ = δij, and expand E as
+E =
+∑
+i
+ρi|vi⟩⟨ wi| (56)
+
+11
+Let us sort the eigenvalues in a descending order and
+assume that the largest one is non-degenerate, that is
+|ρ1| >|ρ2|≥| ρ3|≥ .... Then, for N≫ 1, R≫ 1, one
+obtains that
+F (x1, x2)≈ ρ−2
+1
+∑
+i>1
+( ρi
+ρ1
+)R−1
+⟨w1| EO1|vi⟩⟨ wi| EO2|v1⟩
+(57)
+- the correlations decay exponentially, with a ﬁnite cor-
+relation length ξ =−1/ log
+⏐⏐⏐ρ2
+ρ1
+⏐⏐⏐.
+B. Transfer operators of PEPS
+The transfer matrix approach can be generalized to two
+dimensional PEPS, such as the ones we consider here,
+constructed in (42). We assume the system has periodic
+boundary conditions - a torus of size N×N (generaliza-
+tions to other boundary conditions are straightforward).
+The local transfer operator of a PEPS on a site is a map
+from two double virtual Hilbert spaces, associated with
+the ingoing (left and down) legs, to other two double vir-
+tual spaces, directed to the outgoing directions (right and
+up):
+ˆT = Tll′,rr′,dd′,uu′|ll′⟩⟨ rr′|⊗| dd′⟩⟨ uu′| (58)
+(note that we use again a convention in which the input
+vectors are denoted by bras, in accordance with matrix
+product ordered from left to right in the positive system
+directions).
+In full analogy with the one dimensional case, the ele-
+ments of the transfer tensor Tll′,rr′,dd′,uu′ are given by
+Tll′,rr′,dd′,uu′ = Trs,t
+[
+Ast
+ruld|st⟩⟨ s′t′| ¯As′t′
+r′u′l′d′
+]
+= Ast
+ruld ¯Ast
+r′u′l′d′ =
+ ≡
+ (59)
+The norm may be computed by properly contracting products of ˆT on all the lattice sites; in expectation values of
+observables, the numerator may be computed by replacing ˆT at the relevant sites by
+(TO)ll′,rr′,dd′,uu′ = Trphys
+[
+Ast
+ruldO|st⟩⟨ s′t′| ¯As′t′
+r′u′l′d′
+]
+= Ast
+ruld ¯As′t′
+r′u′l′d′⟨s′t′| O|st⟩ =
+ (60)
+To compute correlations, we will ﬁrst contract all the tensors along one dimension of the PEPS, converting it
+eﬀectively to an MPS [31, 32, 44] whose transfer matrix can be deﬁned as above. For example, the transfer matrix of
+a row of lengthN is obtained by contraction along the horizontal direction,
+ˆE = Tl1l′
+1,r1r′
+1,d1d′
+1,u1u′
+1 Tl2l′
+2,r2r′
+2,d2d′
+2,u2u′
+2··· TlNl′
+N,rNr′
+N,dNd′
+N,uNu′
+N
+Tr [|l1l′
+1⟩⟨ r1r′
+1|l2l′
+2⟩⟨ r2r′
+2|···| lN l′
+N⟩⟨ rN r′
+N|]
+×| d1d′
+1⟩⟨ u1u′
+1|⊗ ...⊗| dN d′
+N⟩⟨ uN u′
+N| = Ed1d,1,...,dN,d′
+N ;u1u′
+1,...,uN,u′
+N
+|d1d′
+1⟩⟨ u1u′
+1|⊗ ...⊗| dN d′
+N⟩⟨ uN u′
+N|
+=
+(61)
+where
+Ed1d,1,...,dN,d′
+N ;u1u′
+1,...,uN,u′
+N
+= Ti1,i′
+1,i2i′
+2,d1d′
+1,u1u′
+1 Ti2,i′
+2,i3i′
+3,d2d′
+2,u2u′
+2··· TiNi′
+N,i1i′
+1,dNd′
+N,uNu′
+N
+(62)
+Using E and similar transfer matrices which include
+observables, one may use the entire MPS machinery for
+computations of norms, expectation values and correla-
+tion functions. Naively, one may deduce that correlations
+in this case decay exponentially as in the MPS case [43].
+However, unlike in the one dimensional, MPS case, here
+the transfer matrix is a composite object with some in-
+ternal structure, which can lead to diﬀerent results. It
+was shown in [60], for example, that two dimensional
+PEPS can describe critical physics, exhibiting power law
+contributions.
+
+12
+C. Flux free transfer operators
+Let us apply the above to the computation of the norm.
+For that, consider the ﬂux-free transfer operator, that is,
+the local building block of the transfer matrix on a single
+site, with no string (group element operator Uj), ˆT , as
+deﬁned in (58). We calculate its elements using (59), and
+thanks to the symmetry conditions (50) we obtain that
+for every g∈ G,
+(
+θl
+g⊗ ˜θ†l′
+g
+)
+⊗
+(
+θd
+g⊗ ˜θ†d′
+g
+)
+ˆT = ˆT θr
+g⊗˜θ†r′
+g = ˆT θu
+g⊗˜θ†u′
+g = ˆT
+(63)
+(see Fig. 6(a)). This implies, that in (58), the outgoing
+vectors|rr′⟩ and|uu′⟩ are both separately singlets under
+the action of
+(
+θg⊗ ˜θ†
+g
+)
+- that is, they are on-leg singlets
+, denoted by⟨0 (jr)| and⟨0 (ju)| and deﬁned as
+|0 (j)⟩ =|jmjm⟩ (64)
+The ingoing legs |ll′⟩⊗| dd′⟩, on the other hand, com-
+bine together to a singlet under
+(
+θl
+g⊗ ˜θ†l′
+g
+)
+⊗
+(
+θd
+g⊗ ˜θ†d′
+g
+)
+:
+⟨jlmljdmd|j′
+lm′
+lj′
+dm′
+d⟩| jlml, j′
+lm′
+l⟩⊗|jdmd, j′
+dm′
+d⟩. We can
+therefore conclude that the general structure of ˆT is
+ˆT =
+∑
+{j}
+Tjl,j′
+l,jr;jd,j′
+d,ju⟨jlmljdmd|j′
+lm′
+lj′
+dm′
+d⟩| jlml, j′
+lm′
+l⟩⟨ 0 (jr)|⊗| jdmd, j′
+dm′
+d⟩⟨ 0 (ju)| (65)
+Figure 6. The invariance properties of the transfer operator
+ˆT (a) and its map interpretation (b).
+- it is a map with two inputs and two outputs, which
+takes a joint singlet (on both the ingoing legs) into two
+separate on-leg singlets, on each outgoing leg alone (see
+Fig. 6(b)).
+D. The row transfer matrix and the norm
+Suppose we wish to compute the norm, which in-
+volves contracting the tensor product of ˆT every-
+where. Each ˆT obtains its inputs from the neighbour-
+ing ˆT operators on its left and bottom, whose outputs
+are on-leg singlets: that is, when the norm is com-
+puted, the inputs |jlml, j′
+lm′
+l⟩⟨ 0 (jr)| on the left leg and
+|jdmd, j′
+dm′
+d⟩⟨ 0 (jr)| on the lower one are being con-
+tracted with the outputs from neighbouring sites -⟨0 (jr)|
+and⟨0 (ju)| respectively. Thus, for the norm contraction
+it is enough to focus only on a subset of the T elements,
+where only on-leg singlets are allowed as input. Denot-
+ing by Π0 = ∑
+j
+|0 (j)⟩⟨ 0 (j)| the projection operator onto
+on-leg singlets|0 (j)⟩ =|jmjm⟩, we deﬁne
+ˆτ0 = Π0⊗ Π0 ˆT≡
+ (66)
+(introducing a new notation which will be used for tiling
+diagrams below, in which the legs are implicit). It takes
+the simple form
+ˆτ0 =
+∑
+{j}
+(τ0)jl,jr;jd,ju|0 (jl)⟩⟨ 0 (jr)|⊗| 0 (jd)⟩⟨ 0 (ju)|
+(67)
+where (τ0)jl,jr;jd,ju = Tjl,jl,jr;jd,jd,ju.
+To see how this simpliﬁes the contraction, let us con-
+sider some illustrative examples. First, consider the ZN
+case, in which (disregarding multiplicities) the virtual
+Hilbert spaces are spanned by D = N basis states, cor-
+responding to the j = 0 , ..., N− 1 irreps. Thus we will
+have N on-leg singlets, of the form
+|0 (j)⟩ =|jj⟩ (68)
+The tensor ˆτ0 will thus contain N4 elements; having con-
+sidered T without taking the symmetry into account,
+with two N dimensional legs per direction, we would have
+instead N8 tensor elements! That is, the number of ele-
+ments that actually need to be used for contraction is N4
+times smaller. Next, generalize to U(1), and suppose we
+truncate and allow for the |j|≤ J for some J > 0. Then
+we will have once again on-leg singlets of the form (68).
+There are D = 2J + 1 irreps in the virtual Hilbert space,
+we have D on-leg singlets and, similarly to the ZN case,
+we obtain a reduction of D4: D4 elements in ˆτ0 which we
+
+13
+need for the contraction, rather than the D8 in the most
+general case.
+The simpliﬁcation is even bigger when we consider
+non-Abelian groups, because the tensors ˆτ0 only see the
+representations and not the diﬀerent m values within
+them. For example, consider SU (2), with the smallest
+truncation, containing the j = 0 , 1/2 representations.
+This implies that each virtual Hilbert space has dimen-
+sion 3. Naively speaking, T would be a tensor with
+38 = 6561 elements. Reducing to ˆ τ0, with only two
+on-leg singlets for the two irreps used, the number of
+relevant elements decreases to 2 4 = 16, that is, approx-
+imately 410 times less! If we wish to consider, a little
+more generally, all the irreps of SU (2) between 0 to some
+J, the dimension of the virtual Hilbert spaces would be
+D (J) =
+J∑
+j=0
+(2j + 1) = ( J + 1) (2J + 1) (note that the
+sum runs on both integer and half-integer values). Thus
+T has D8 (J) = ( J + 1)8 (2J + 1)8 elements. However
+the number of on-leg singlets is as the number of irreps,
+2J + 1, and hence ˆτ0 is a tensor with (2 J + 1)4 elements:
+the reduction factor is (J + 1)8 (2J + 1)4, which scales as
+J −12 for large cutoﬀs - a very signiﬁcant reduction!
+To examine further the properties of ˆ τ0, let us con-
+sider ( τ0)jl,jr;jd,ju as a matrix with the multivalued in-
+dices jl, jr and ju, jd. If we assume horizontal-vertical
+reﬂection symmetry, we ﬁnd that it is a symmetric ma-
+trix,
+(τ0)jl,jr;jd,ju = (τ0)jd,ju;jl,jr (69)
+Furthermore, it is a real matrix, since using (59), with
+the restriction (67), we obtain that
+(τ0)jl,jr;jd,ju = Tjl,jl,jr;jd,jd,ju
+=
+∑
+{j,m,n}
+⏐⏐⏐Ajsmsns;jtmtnt
+jrmr;jumu;jlml;jdmd
+⏐⏐⏐
+2 (70)
+Therefore, there exists an orthogonal matrix V , such that
+τ0 = V ΛV † (71)
+where Λ is a diagonal matrix with eigenvalues λµ. This
+allows us to bring ˆτ0 to the convenient form
+ˆτ0 =
+∑
+µ
+λµ ˆMµ⊗ ˆMµ (72)
+where
+ˆMµ =
+∑
+j1,j2
+Vj1j2,µ|0 (j1)⟩⟨ 0 (j2)| (73)
+- one copy of which acts on the horizontal direction and
+the other on the virtual one.
+The real matrices
+{
+ˆMµ
+}
+form an orthonormal set with
+respect to the trace inner product. Since V is orthogonal,
+it is straightforward to show that
+Tr
+[
+ˆMµ ˆMT
+ν
+]
+= δµν (74)
+Suppose our tensor includes D irreps, all the js take D
+diﬀerent values. Then there are D diﬀerent on-leg sin-
+glets, and the matrix τ0 is D2× D2; thus, µ = 1, ..., D2
+and we have D2 ˆMµ matrices. They act on the D di-
+mensional space spanned by the D linearly independent
+on-leg singlets |0 (j)⟩. These matrices form a D2 linear
+space; we have shown that ˆMµ is an orthonormal set of
+D2 matrices within this space, and thus it is an orthonor-
+mal basis and the ˆMµ span the whole space of D× D real
+matrices.
+The row transfer matrix and the norm thus take the
+forms
+ˆE≡
+ = Trrow
+[
+ ]
+=
+∑
+{µ}
+λµ1 λµ2··· λµN Tr
+[
+ˆMµ1
+ˆMµ2··· ˆMµN
+]
+ˆMµ1⊗ ˆMµ2⊗···⊗ ˆMµN
+(75)
+and
+⟨ψ|ψ⟩ = Tr
+[
+ˆEN
+]
+= Tr
+
+
+
+
+= Tr
+
+
+
+
+= Tr
+
+
+
+
+=
+=
+∑
+{µ(x,y)}
+∏
+x,y
+λµ(x,y)
+∏
+y
+Tr
+[
+ˆMµ(1,y) ˆMµ(2,y)··· ˆMµ(N,y)
+] ∏
+x
+Tr
+[
+ˆMµ(x,1) ˆMµ(x,2)··· ˆMµ(x,N)
+]
+(76)
+
+14
+E. Spectrum of the ﬂux-free transfer matrix
+We have used the fact that each leg of ˆτ0 forms a singlet
+|0 (j)⟩; however, recall the symmetry properties of the
+tensor A out of which the transfer operators were con-
+structed, and the Gauss law satisﬁed by its four legs (46):
+jr⊗ ju∼ jl⊗ jd. This implies that ( jl⊗ jr)⊗ (jd⊗ ju)
+must contain the single representation: the horizontal
+representations and the vertical ones must be such that
+can fuse to a singlet together. As a consequence of that,
+elements of ( τ0)jl,jr;jd,ju whose indices do not satisfy it
+must vanish. This splits the matrix (ˆ τ0)jl,jr;jd,ju into
+separate blocks which can be separately diagonalized, im-
+plying similar block structure of the V matrices as well,
+splitting the ˆMµ operators deﬁned in (73) into diﬀerent
+sets.
+First, consider the so-called zero block ˆB0 in which
+jl = jr as well as jd = ju. The elements of this block
+will be linear combinations of products of horizontal and
+vertical on-leg singlet projectors,
+ˆB0 = (τ0)jj;j′j′|0 (j)⟩⟨ 0 (j)|⊗| 0 (j′)⟩⟨ 0 (j′)| (77)
+The ˆMµ operators derived from this block will be diago-
+nal in the space of singlets; the block ( τ0)jj;j′j′ is a sim-
+ple symmetric matrix, diagonalizable by the orthogonal
+block V (0)
+jµ , using which we obtain the diagonal operators
+ˆM(0)
+µ =
+∑
+j
+V (0)
+jµ |0 (j)⟩⟨ 0 (j)| (78)
+The next blocks are responsible to ˆMµ which are oﬀ-
+diagonal in the singlet space. In the U(1) case, for exam-
+ple, we will have blocks for which jl− jr = ju− jd =±k
+(for any integer k allowed by our tensors)
+ˆB±k = (τ0)j,j∓k;j′,j′±k|0 (j)⟩⟨ 0 (j∓ k)|⊗|0 (j′)⟩⟨ 0 (j′± k)|
+(79)
+Let us choose, in ourU(1) example, to include one copy
+of each irrep |j|≤ J (J may also be inﬁnite). The ma-
+trix ( τ0)jl,jr;ju,jd
+will have dimension of (2 J + 1)2. The
+zeroth block of ˆτ, B0 = (τ0)j,jk;j′,j′, will be a 2 J + 1 di-
+mensional matrix (since there are 2 J + 1 possible on-leg
+singlet states). The blocks Bk = (τ0)j,j∓k;j′,j′±k will each
+be 2 J + 1−| k|) dimensional (counting the number of j
+values allowing for j−k and j+k values which agree with
+|j|≤ J), from k =±1 until k =±2J - altogether 2 J + 1
+blocks whose dimensions add up, properly, to the right
+matrix dimension,
+2J∑
+k=−2J
+(2J + 1−| k|) = (2J + 1)2. Fi-
+nally, since (ˆτ0)jl,jr;jd,ju is a symmetric matrix, we obtain
+that Bk = BT
+−k, and write down the matrix in the block
+form
+τ0 =
+lr / du |0 (j)⟩⟨ 0 (j)|···| 0 (j)⟩⟨ 0 (j− k)|| 0 (j− k)⟩⟨ 0 (j)|···| 0 (J)⟩⟨ 0 (−J)|| 0 (−J)⟩⟨ 0 (J)|
+
+
+
+
+|0 (j)⟩⟨ 0 (j)| B0 ··· 0 0 ··· 0 0
+... ... ... ... ... ...
+|0 (j)⟩⟨ 0 (j− k)| 0 ··· 0 Bk ··· 0 0
+|0 (j− k)⟩⟨ 0 (j)| 0 ··· BT
+k 0 ··· 0 0
+... ... ... ... ... ...
+|0 (J)⟩⟨ 0 (−J)| 0 ··· 0 0 ··· 0 BJ
+|0 (−J)⟩⟨ 0 (J)| 0 ··· 0 0 ··· BT
+J 0
+(80)
+(where the headers of the rows and columns denote the
+type of operators they connect with). This matrix can be
+easily blockwise diagonalized, involving the diagonaliza-
+tion of J+1 diﬀerent blocks. Similar forms can be written
+also for other gauge groups (later on, we will work out a
+detailed example for the Z2 case).
+Before moving on to the contraction of Wilson loops,
+we shall consider some simple illustrative cases of norm
+computation, regardless of the gauge group. First, as-
+sume that all the blocks but the zeroth one vanish, and,
+on top of that, that the zeroth block is diagonal, that is
+ˆτ0 =
+∑
+j
+λj|0 (j)⟩⟨ 0 (j)|⊗| 0 (j)⟩⟨ 0 (j)| (81)
+- all the relevant ˆMµ operators are projectors (the other
+ones do not contribute since they are associated with zero
+eigenvalues). Then, it is easy to see that the transfer
+
+15
+matrix is
+ˆE =
+∑
+j
+λN
+j |0 (j)⟩⟨ 0 (j)|⊗|0 (j)⟩⟨ 0 (j)|⊗···⊗| 0 (j)⟩⟨ 0 (j)|
+(82)
+Then, the eigenvectors are product vectors of the same
+representation,⟨wj| =⟨0 (j)|⊗···⊗⟨ 0 (j)| with eigenval-
+ues ρj = λN
+j , and the norm is
+⟨ψ|ψ⟩ = Tr
+[
+ˆEN
+]
+=
+∑
+j
+λN 2
+j (83)
+Next, we keep the oﬀ-diagonal terms of the zeroth
+block zero, but allow for very small nonzero elements
+in the other blocks - that is, signiﬁcantly smaller (in
+absolute value) than the diagonal terms of the zeroth
+block. If D irreps participate in our state, we have
+ˆMµ = |0 (jµ)⟩⟨ 0 (jµ)| for µ = 1 , ..., D, with eigenval-
+ues |λ1| ≥ ... ≥ |λD| > 0; while for some K > D ,
+|λµ+1|≥ ...≥| λµ+K| > 0 and there is some 1 ≤ L≤ D
+for which |λµ+1| ≪ |λL|. Then one may use pertur-
+bation theory to ﬁnd the spectrum of ˆE. The nonper-
+turbed part is ∑
+µ≤L
+λN
+µ|0 (jµ)⟩⟨ 0 (jµ)|⊗| 0 (jµ)⟩⟨ 0 (jµ)|⊗
+···⊗| 0 (jµ)⟩⟨ 0 (jµ)| giving rise to zeroth order eigenvec-
+tors as before, with corrections which are product vectors
+as well.
+Now allow for nonzero weak oﬀ diagonal elements in
+the zeroth block. Perturbation theory is still valid, keep-
+ing our eigenvectors close to product states along the row.
+In fact, as long as the diagonal terms of the zeroth block
+are signiﬁcantly stronger (in absolute value) than the rest
+of the τ0 elements, this argument holds. As these other
+terms get larger and larger, the perturbative description
+loses its validity and the eigenvectors get farther from
+being product states along the row.
+This may be interpreted as the lack or the presence of
+long-range order: the farther we are from product states
+along the row, the longer ranged order we have. Since
+conﬁnement has to do with disorder [45], we ﬁnd here
+the ﬁrst hint to detecting area law from the transfer op-
+erators. As we shall see later on, indeed, the closer the
+transfer matrix eigenvectors are to product states, the
+closer we are to an area law of the Wilson loop.
+V. A TALE OF TILING: CONTRACTING
+WILSON LOOPS
+After having computed the norms, we move further to
+the contraction of Wilson Loop expectation values, which
+ﬁrst requires studying further local ingredients: the ﬂux-
+carrying transfer operators.
+A. Flux carrying transfer operators
+Consider the transfer operators associated with sites
+carrying a straight ﬂux line - that is, a group element
+operator Uj (or Uj†) acting on either the horizontal or
+vertical direction, computed using (60):
+(
+[T→]J
+MN
+)
+ll′,rr′;dd′,uu′
+= Trphys
+[
+Ast
+ruldUsJ
+MN|st⟩⟨ s′t′| ¯As′t′
+r′u′l′d′
+]
+= Ast
+ruld ¯As′t
+r′u′l′d′⟨s′| UJ
+MN|s⟩≡
+(
+[T↑]J
+MN
+)
+ll′,rr′;dd′,uu′
+= Trphys
+[
+Ast
+ruldUtJ
+MN|st⟩⟨ s′t′| ¯As′t′
+r′u′l′d′
+]
+= Ast
+ruld ¯Ast′
+r′u′l′d′⟨t′| UJ
+MN|t⟩≡
+(
+[T←]J
+MN
+)
+ll′,rr′;dd′,uu′
+= Trphys
+[
+Ast
+ruldUsJ†
+MN|st⟩⟨ s′t′| ¯As′t′
+r′u′l′d′
+]
+= Ast
+ruld ¯As′t
+r′u′l′d′⟨s′| UJ†
+MN|s⟩≡
+(
+[T↓]J
+MN
+)
+ll′,rr′;dd′,uu′
+= Trphys
+[
+Ast
+ruldUtJ†
+MN|st⟩⟨ s′t′| ¯As′t′
+r′u′l′d′
+]
+= Ast
+ruld ¯Ast′
+r′u′l′d′⟨t′| UJ†
+MN|t⟩≡
+(84)
+Using the symmetry conditions (44) as well as the transformation properties of the group element operators (31),
+
+16
+we obtain that for every g∈ G,
+(
+θl
+g⊗ ˜θ†l′
+g
+)
+⊗
+(
+θd
+g⊗ ˜θ†d′
+g
+) [
+ˆT→
+]J
+MN
+= DJ
+MM ′
+(
+g−1)[
+ˆT→
+]J
+M ′N
+[
+ˆT→
+]J
+MN
+(
+θr
+g⊗ ˜θ†r′
+g
+)
+=
+[
+ˆT→
+]J
+MN ′
+DJ
+N ′N
+(
+g−1)
+[
+ˆT→
+]J
+MN
+(
+θu
+g⊗ ˜θ†u′
+g
+)
+=
+[
+ˆT→
+]J
+MN
+(85)
+(see Fig. 7(a)). That is,
+[
+ˆT→
+]J
+MN
+maps from a total
+⟨J M| on both ingoing legs (with respect to
+(
+θl
+g⊗ ˜θ†l′
+g
+)
+⊗(
+θd
+g⊗ ˜θ†d′
+g
+)
+) onto ⟨J N| with respect to
+(
+θr
+g⊗ ˜θ†r′
+g
+)
+on
+the outgoing horizontal leg and a singlet with respect to(
+θu
+g⊗ ˜θ†u′
+g
+)
+on the outgoing vertical leg (see Fig. 8(a)).
+As in the ﬂux-free case, that will have implications on
+the structure of the
+[
+ˆT→
+]J
+MN
+operators.
+Furthermore, the transfer operators
+[
+ˆT→
+]J
+MN
+form a
+multiplet for each J, whose elements are mixed by the
+transformations. There is no problem with that, because
+in the contraction of the Wilson loop we sum over the
+M, N indices (matrix product and tracing of the U ma-
+trices). As usual, in the Abelian case the multiplets are
+trivial and contain one operator only, allowing us to give
+an intuitive illustration. For example, let us consider
+U(1) with the fundamental representation j = 1; there,
+the transformations take the simple form
+e
+iφ
+(
+El−El′
++Ed−Ed′ )
+ˆT→ = e−iφ ˆT→
+ˆT→e
+iφ
+(
+Er−Er′ )
+= e−iφ ˆT→
+ˆT→e
+iφ
+(
+Eu−Eu′ )
+= ˆT→
+(86)
+For the inverse horizontal ﬂux line, one obtains
+(
+θl
+g⊗ ˜θ†l′
+g
+)
+⊗
+(
+θd
+g⊗ ˜θ†d′
+g
+) [
+ˆT←
+]J
+MN
+=
+[
+ˆT←
+]J
+MN ′
+DJ
+N ′N (g)
+[
+ˆT←
+]J
+MN
+(
+θr
+g⊗ ˜θ†r′
+g
+)
+= DJ
+MM ′ (g)
+[
+ˆT←
+]J
+M ′N
+[
+ˆT←
+]J
+MN
+(
+θu
+g⊗ ˜θ†u′
+g
+)
+=
+[
+ˆT←
+]J
+MN
+(87)
+(see Fig. 7(b)) - the diﬀerence from the right going ﬂux is not very big, and has to do mainly on the opposite ﬂux
+orientation: g instead of g−1 appears in the transformation, and the beginning index M is now associated with the
+right side rather than the left (similarly, N with the left rather than the right), since the ﬂux goes backwards. This
+corresponds to transposition, and since the representations are unitary, Dj
+nm (g) = Dj
+mn (g−1) - i.e., the conjugate
+representation J. As a result, we denote the input of both legs as
+⟨
+J N
+⏐⏐ and the output of the right leg as
+⟨
+J M
+⏐⏐ -
+vectors with a conjugate transformation rule (see Fig. 8(b)).
+In the vertical direction, we have
+(
+θl
+g⊗ ˜θ†l′
+g
+)
+⊗
+(
+θd
+g⊗ ˜θ†d′
+g
+) [
+ˆT↑
+]J
+MN
+= DJ
+MM ′
+(
+g−1)[
+ˆT↑
+]J
+M ′N
+[
+ˆT↑
+]J
+MN
+(
+θr
+g⊗ ˜θ†r′
+g
+)
+=
+[
+ˆT↑
+]J
+MN
+[
+ˆT↑
+]J
+MN
+(
+θu
+g⊗ ˜θ†u′
+g
+)
+=
+[
+ˆT↑
+]J
+MN ′
+DJ
+N ′N
+(
+g−1)
+(88)
+(Fig. 7(c)) and
+(
+θl
+g⊗ ˜θ†l′
+g
+)
+⊗
+(
+θd
+g⊗ ˜θ†d′
+g
+) [
+ˆT↓
+]J
+MN
+=
+[
+ˆT↓
+]J
+MN ′
+DJ
+N ′N (g)
+[
+ˆT↓
+]J
+MN
+(
+θr
+g⊗ ˜θ†r′
+g
+)
+=
+[
+ˆT↓
+]J
+MN
+[
+ˆT↓
+]J
+MN
+(
+θu
+g⊗ ˜θ†u′
+g
+)
+= DJ
+MM ′ (g)
+[
+ˆT↓
+]J
+M ′N
+(89)
+(Fig. 7(d)). The input/output pictures, when looking at these operators as maps, are shown in Fig. 8(c,d). Note
+
+17
+Figure 7. Transformation rules of the straight ﬂux carrying transfer operators: (a)
+[
+ˆT→
+]J
+MN
+- Eq. (85); (b)
+[
+ˆT←
+]J
+MN
+- Eq.
+(87); (c)
+[
+ˆT↑
+]J
+MN
+- Eq. (88); (d)
+[
+ˆT↓
+]J
+MN
+- Eq. (89);
+Figure 8. The straight ﬂux line transfer operators as maps.
+that when plugging the trivial representation into any of
+the results for straight ﬂux lines, that isJ = M = N = 0,
+ˆT is obtained.
+There are many other options to consider, in which
+ﬂux line(s) go through a site. Here we only look at the
+ones required for our counter-clockwise Wilson loop con-
+traction, which implies naively that four further types
+of transfer operators, for the corners, are required. How-
+ever, we only need one, as we shall see shortly when tiling
+the loop,
+([
+ˆT↘
+]J
+MN
+)
+ll′,rr′;dd′,uu′
+= Trphys
+[
+Ast
+ruldUtJ†
+MK UsJ
+KN|st⟩⟨ s′t′| ¯As′t′
+r′u′l′d′
+]
+= Ast
+ruld ¯As′t′
+r′u′l′d′⟨t′| UJ†
+MK|t⟩⟨ s′| UJ
+KN|s⟩≡
+(90)
+Its transformation properties may be similarly derived,
+resulting in
+(
+θl
+g⊗ ˜θ†l′
+g
+)
+⊗
+(
+θd
+g⊗ ˜θ†d′
+g
+) [
+ˆT↘
+]J
+MN
+=
+[
+ˆT↘
+]J
+MN
+[
+ˆT↘
+]J
+MN
+(
+θr
+g⊗ ˜θ†r′
+g
+)
+=
+[
+ˆT↘
+]J
+MN ′
+DJ
+N ′N
+(
+g−1)
+[
+ˆT↘
+]J
+MN
+(
+θu
+g⊗ ˜θ†u′
+g
+)
+= DJ
+MM ′ (g)
+[
+ˆT↘
+]J
+M ′N
+(91)
+
+18
+Figure 9. The lower left corner transfer operator: (a) trans-
+formation rules and (b) as a map.
+- the ingoing legs form a combined singlet, while both the
+outgoing legs, separately, belong to the J representation
+(one regular, one conjugate) - see Fig. 9.
+B. Tiling the loop and projecting onto smaller
+spaces
+Do we need to use all the elements of the transfer oper-
+ators for the Wilson loop contraction? The answer is no;
+we can ignore some of them in the computation, while
+tiling the diﬀerent building blocks together, thanks to
+the local symmetry and the special properties it enforces
+on the states and the transfer operators, just like we did
+in the case of the norm. As discussed, each of the local
+transfer operators used for the contraction, either with
+or without ﬂux, can be seen as a map between the two
+ingoing legs to the two outgoing ones. While the ingoing
+legs form together a multiplet vector of the group, the
+output is a product of two separate multiplet vectors on
+the two outgoing legs (see Fig. 6(b), 8 and 9(b)). The
+numerator of the Wilson loop expectation value requires
+a particular tiling of the transfer operators, closing the
+loop. Since the output to each direction forms a multi-
+plet vector, this will also be the input of the neighbouring
+transfer operators in the outgoing directions, and we can
+restrict all our transfer operators by cutting oﬀ all the in-
+put options that could not be realized within the Wilson
+loop tiling. This is done in a very similar way to what
+did in the norm computation, where we deﬁned ˆ τ0 (67)
+instead of ˆT .
+Since our system is translationally invariant, let us
+identify the lower left corner of the loop with the lower
+left corner of our system. Let us consider the numerator
+of the expectation value of the Wilson loop:
+⟨ψ| W|ψ⟩ =⟨ψ|
+ |ψ⟩ = Tr
+
+
+
+
+(92)
+Where the trace is on both directions, assuming peri-
+odic boundaries (similar results may be easily derived
+for open boundary conditions); the J, M, N indices of
+the ﬂux-carrying transfer operators have been omitted
+for simplicity, but it is assumed that they all carry the
+same irrep J (otherwise it would make no physical sense)
+and that the M, N indices are properly connected and
+summed over along the loop. Using the mapping prop-
+erties summarized in ﬁgures 6(b), 8 and 9(b), we can
+write on each of the outgoing legs its output representa-
+tion - 0, J or J for the conjugate representations used in
+the backwards ﬂuxes cases. This immediately determines
+onto which inputs the transfer operators should be pro-
+jected. Note that the lower right and both upper corners
+do not seem right in the equation above; nevertheless
+these are the right ingredients to be used, as explained
+below.
+The tiling is composed of the following ingredients:
+• Outside of the loop and within it, on sites through
+which no ﬂux lines pass, we use the ﬂux-free trans-
+
+19
+fer operator ˆT . They only receive 0 as inputs, and
+thus may be replaced by ˆ τ0 from Eq. (66) in all
+these places.
+• On the lower left corner, we use the
+[
+ˆT↘
+]J
+, which,
+thanks to receiving 0 inputs on both directions from
+ˆτ0 operators, may be replaced by
+[ˆτ↘]J
+MN = Π0⊗ Π0
+[
+ˆT↘
+]J
+MN
+≡
+ (93)
+• Along the lower edge, until the next corner, we use[
+ˆT→
+]J
+. As the input of these operators is J from
+the left and 0 from below, they may be replaced by
+[ˆτ→]J
+MN = ΠJM⊗ Π0
+[
+ˆT→
+]J
+MN
+≡
+ (94)
+using the on-leg projector Π JM =∑
+j,j′
+|J M (j, j′)⟩⟨ J M (j, j′)| (no summation on
+M) and deﬁning
+|J M (j, j′)⟩ =⟨J M jm|j′m′⟩| jmj ′m′⟩ (95)
+• When turning upwards, in the lower right corner,
+we use
+[
+ˆT↑
+]J
+: our tensors only contain physical
+degrees of freedom on the outgoing links; at this
+site the only physical leg carrying ﬂux is the one
+pointing upwards and therefore this is the relevant
+transfer operator. Its input allows us to restrict it
+to
+[ˆτ↗]J
+MN = ΠJM⊗ Π0
+[
+ˆT↑
+]J
+MN
+≡
+ (96)
+• We go along with
+[
+ˆT↑
+]J
+all the way up until the top
+right corner, but with diﬀerent input, introducing
+[ˆτ↑]J
+MN = Π0⊗ ΠJM
+[
+ˆT↑
+]J
+MN
+≡
+ (97)
+• At the upper right corner, the ﬂuxes only come
+from the ingoing legs, and therefore the relevant
+transfer operator is once again ˆT , projected this
+time onto
+[ˆτ↖]J
+MN = ΠJN⊗ ΠJM ˆT≡
+ (98)
+where ΠJN = ∑
+j,j′
+⏐⏐J N (j, j′)
+⟩ ⟨
+J N (j, j′)
+⏐⏐ (no sum-
+mation on N) and
+⏐⏐J M (j, j′)
+⟩
+=⟨J M j′m′|jm⟩| jmj ′m′⟩ (99)
+• All the way to the left we proceed with
+[
+ˆT←
+]J
+along
+the upper edge. Until the next corner - and without
+including it, it can be replaced by
+[ˆτ←]J
+MN = ΠJN⊗ Π0
+[
+ˆT←
+]J
+MN
+≡
+ (100)
+• At the upper left corner we still use
+[
+ˆT←
+]J
+but with
+diﬀerent inputs, projecting it to
+[ˆτ↙]J
+MN = Π0⊗ ΠJN
+[
+ˆT←
+]J
+MN
+≡
+ (101)
+• Finally, we go down with
+[
+ˆT↓
+]J
+all the way to the
+starting point, restricting it to
+[ˆτ↓]J
+MN = Π0⊗ ΠJN
+[
+ˆT↓
+]J
+MN
+≡
+ (102)
+Just like in the case of ˆ τ0 compared with ˆT , these
+newly introduced operators contain less tensor elements
+and simplify the contraction of the Wilson loop,
+⟨ψ| W|ψ⟩ = Tr
+
+
+
+
+(103)
+C. The decay of Wilson loops: is an area law
+possible?
+Now we have all the ingredients required for the com-
+putation of a Wilson loop whose dimensions are R1× R2,
+
+20
+and compute it using row transfer matrices, by contract-
+ing ﬁrst in the horizontal direction, within an N×N
+system with periodic boundary conditions (torus).
+We denote the transfer matrix corresponding to the
+ﬁrst row we contract (the one containing the lower edge
+of the loop) by
+[
+ˆEb
+]J
+MN
+(R)≡
+= Trrow
+[
+ ]
+(104)
+on top of it, there will beR2−1 rows with parallel vertical
+ﬂux lines, represented by
+[
+ˆE∥
+]J
+MlNlMrNr
+(R)≡
+= Trrow
+[
+ ]
+(105)
+the top of the loop is represented the row transfer matrix
+we deﬁne by
+[
+ˆEt
+]J
+MN
+(R)≡
+= Trrow
+[
+ ]
+(106)
+and all the remaining rows simply contribute ˆE (we
+omit the J, M, N indices for simplicity, assuming some
+given J for the Wilson loop, and implicitly contracting
+over the M, N indices). The expectation value of the
+Wilson loop may then be written as
+⟨W (R1, R2)⟩ =
+Tr
+
+
+
+
+Tr
+
+
+
+
+=
+Tr
+[
+ˆEb (R1) ˆER2−1
+∥ (R1) ˆEt (R1) ˆEN −R2−1
+]
+Tr [EN ]
+(107)
+It is very similar to the MPS expression used for comput-
+ing correlation functions (55) with one major diﬀerence.
+Due to the local symmetry, in between the two rows clos-
+ing the loop, we need to use a diﬀerent transfer matrix,
+ˆE∥: the long range decay properties depend now two dif-
+ferent transfer matrices, instead of one.
+As stated in the beginning of this subsection, we
+have omitted the M, N indices and we assume implicit
+summation over them when contracting the loop. The
+Wilson loop contraction consists of the contraction of
+2 (R1 + R2) indices, each taking dim (J) values - naively
+speaking, we would have to consider dim2(R1+R2) (J) dif-
+ferent contractions; however, the singular values are in-
+dependent of these indices and depend only on the irrep
+J. Thanks to this symmetry, all the dim 2(R1+R2) (J) are
+equal, so it is enough to make one choice of the indices
+and multiply the result by dim 2(R1+R2) (J). This will be
+a perimeter-law term, however in the presence of an area
+law term it will not contribute in the large loop limit.
+Hence we focus below on computing for one particular
+choice of the indices.
+Consider the diagonalization of the two transfer matri-
+ces which matter for the long range properties,
+ˆE =
+∑
+i
+ρi|vi⟩⟨ wi|
+ˆE∥ (R) =
+∑
+i
+ρ′
+i (R)|v′
+i (R)⟩⟨ w′
+i (R)|
+(108)
+Once again, we sort the eigenvalues in decreasing or-
+der, but in this case we do not care if the highest one
+is degenerate (but assume the existence of a spectral
+gap): for some integers K, K′≥ 1,|ρ1| = ... =|ρK| >
+|ρK+1|≥| ρK+2|≥ ... and|ρ′
+1 (R)| = ... =|ρ′
+K′ (R)| >⏐⏐ρ′
+K′+1 (R)
+⏐⏐≥
+⏐⏐ρ′
+K′+2 (R)
+⏐⏐≥ ...
+Let us use this to compute the expectation value of the
+Wilson loop (107) in the thermodynamic limit N≫ R2:
+
+21
+⟨W (R1, R2)⟩ = dim2(R1+R2) (J)
+ρN −R2−1
+1 Tr
+[( K∑
+i=1
+|vi⟩⟨ wi| + ∑
+i>K
+(
+ρi
+ρ1
+)N −R2−1
+|vi⟩⟨ wi|
+)
+Eb (R1) ER2−1
+∥ (R1) Et (R1)
+]
+ρN
+1 Tr
+[ K∑
+i=1
+|vi⟩⟨ wi| + ∑
+i>K
+(
+ρi
+ρ1
+)N
+|vi⟩⟨ wi|
+]
+→ dim2(R1+R2) (J)
+KρR2+1
+1
+K∑
+i=1
+⟨wi| ˆEb (R1) ˆER2−1
+∥ (R1) ˆEt (R1)|vi⟩
+(109)
+(we assumed that ρ1 = ... = ρK; the generalization for the case of diﬀerent phases is straightforward).
+We further assume that the loop is large, that is - R1, R2≫ 1, allowing us to perform a similar simpliﬁcation for
+E∥, and obtain that in the thermodynamic limit, for large loops,
+⟨W (R1, R2)⟩→ dim2(R1+R2) (J) ρ′R2−1
+1 (R1)
+KρR2+1
+1
+K∑
+i=1
+K′
+∑
+j=1
+⟨wi| ˆEb (R1)
+⏐⏐v′
+j (R1)
+⟩ ⟨
+w′
+j (R1)
+⏐⏐ ˆEt (R1)|vi⟩ (110)
+(This holds only if
+K∑
+i=1
+K′
+∑
+j=1
+⟨wi| ˆEb (R1)
+⏐⏐v′
+j (R1)
+⟩ ⟨
+w′
+j (R1)
+⏐⏐ ˆEt (R1)|vi⟩̸ = 0; if this condition is not fulﬁlled, the vectors
+⏐⏐v′
+j
+⟩
+and⟨w′
+i| should not be seen as those corresponding to the highest eigenvalues, but rather as those with the
+highest eigenvalues for which this condition is satisﬁed. We assumed here that ρ′
+1 = ... = ρ′
+K′; the generalization for
+the case of diﬀerent phases is straightforward).
+Assuming rotational invariance, we could repeat the same procedure by contracting the columns ﬁrst, to obtain
+⟨W (R1, R2)⟩ =
+Tr
+
+
+
+
+Tr
+
+
+
+
+→ dim2(R1+R2) (J) ρ′R1−1
+1 (R2)
+KρR1+1
+1
+K∑
+i=1
+K′
+∑
+j=1
+⟨wi| ˆEb (R2)
+⏐⏐v′
+j (R2)
+⟩ ⟨
+w′
+j (R2)
+⏐⏐ ˆEt (R2)|vi⟩
+(111)
+Both expressions must be equal; therefore, we deduce that
+ρ′R2−1
+1 (R1)
+K∑
+i=1
+K′
+∑
+j=1
+⟨wi| ˆEb (R1)
+⏐⏐v′
+j (R1)
+⟩ ⟨
+w′
+j (R1)
+⏐⏐ ˆEt (R1)|vi⟩∝ 1
+ρR1+1
+1
+(112)
+But the more interesting question is whether ∂ρ′
+1 (R) /∂R = 0 or not. If the largest eigenvalue of ˆE∥ (R) does not
+depend on R, we obtain that
+⟨W (R1, R2)⟩→ ˜C
+(
+dim2 (J) ρ′
+1
+ρ1
+)R1+R2
+(113)
+with some constant ˜C: perimeter law decay of the Wilson loop (unless ρ1 = ρ′
+1). On the other hand, an area law is
+possible if
+ρ′
+1 (R)∼ Γe−κR (114)
+with κ > 0. Let us plug this expression into (111) and (112). We will obtain the equation
+⟨W (R1, R2)⟩→ dim2(R1+R2) (J)
+KΓρ1
+( Γ
+ρ1e−κ
+)R1
+e−κR1R2
+K∑
+i=1
+K′
+∑
+j=1
+⟨wi| ˆEb (R2)
+⏐⏐v′
+j (R2)
+⟩ ⟨
+w′
+j (R2)
+⏐⏐ ˆEt (R2)|vi⟩
+= dim2(R1+R2) (J)
+KΓρ1
+( Γ
+ρ1e−κ
+)R2
+e−κR1R2
+K∑
+i=1
+K′
+∑
+j=1
+⟨wi| ˆEb (R1)
+⏐⏐v′
+j (R1)
+⟩ ⟨
+w′
+j (R1)
+⏐⏐ ˆEt (R1)|vi⟩
+(115)
+
+22
+Rotation invariance guarantees that
+K∑
+i=1
+K′
+∑
+j=1
+⟨wi| ˆEb (R)
+⏐⏐v′
+j (R)
+⟩ ⟨
+w′
+j (R)
+⏐⏐ ˆEt (R)|vi⟩∼ C
+( Γ
+ρ1e−κ
+)R
+(116)
+for some constant C, and we and obtain, ﬁnally, for large
+Wilson loops, that if ρ′
+1 (R)∼ Γe−κR,
+⟨W (R1, R2)⟩→ C
+KΓρ1
+(Γdim2 (J)
+ρ1e−κ
+)R1+R2
+e−κR1R2
+(117)
+- exactly the same form of (39), with W0 = C
+KΓρ1
+, κA = κ
+and κP = log
+(
+ρ1
+Γdim2(J)
+)
+− κ.
+Therefore, we conclude that a perimeter law will be
+obtained if the largest relevant (in terms of accessible
+through ˆEb and ˆEt) eigenvalue of ˆE∥ (R) is independent
+of R; an area law is possible if it depends on R exponen-
+tially. Why only possible? To see why this condition is
+necessary but not suﬃcient for the area law to hold, let
+us consider the following scenario.
+Previously, we made the assumption that the eigen-
+vectors of the ﬂux-free transfer matrix should be close to
+product vectors in order to make an area law possible.
+We also know that the expectation value of the Wilson
+loop depends on the zeroth ﬂux transfer operators ˆτ0 in-
+side and outside the loop, and some other, ﬂux-carrying
+transfer operators along the loop. Let us assume that we
+are, indeed, in a scenario in which the eigenvalues of the
+transfer matrix are close to product states. Denote as
+usual the highest eigenvalue of the transfer operator by
+λ1 . Then the norm, for a large system, will roughly scale
+as λN 2
+1 : each site contributes a single power of λ1. This
+is the denominator of the expectation value formula. In
+the numerator, we will have a contribution of λ1 for each
+site outside the loop; within the loop, it depends.
+If the ﬂux carrying transfer operators along the loop
+take us from the singlet subspace corresponding to λ1
+to that of another eigenvalue - denote it by λ′ - we will
+have a contribution of λ′ for each of the sites within the
+loop, and the Wilson loop’s expectation value will scale as
+(λ′/λ1)A where A is the area of the loop ( E∥ (R)∝ λ′R).
+However, if the ﬂux carrying transfer operators do not
+take us to another singlet subspacewith a diﬀerent eigen-
+value, we will not have an area dependent contribution.
+In this case, the largest eigenvalue of ˆE∥ (R) depends ex-
+ponentially on R (through λ′R) but an area law is not
+obtained, which shows us why this condition is necessary
+but not suﬃcient.
+On the other hand, if the eigenvectors of ˆE are far
+from product vectors, which means they are governed by
+some collective, long range eﬀect, we cannot have area-
+dependent contributions at all.
+VI. ILLUSTRATION: THE Z2 CASE
+To conclude and illustrate our discussion, we will show
+an explicit example, where the gauge group is Z2. In
+this case, the group Hilbert space on each link is two
+dimensional, with representations labelled by j = +,−,
+which can be simply seen as spins. The group element
+operators are Hermitian, U = U † = X, and invert the
+spin,
+X|±⟩ =|∓⟩ (118)
+and the group operations Θ (no diﬀerence between left
+and right in Abelian groups) are the identity operator as
+well as
+Z|±⟩ =±|±⟩ (119)
+Gauge transformations are given by
+ˆΘ (x) = Z (x, 1) Z (x, 2) Z (x− ˆe1, 1) Z (x− ˆe1, 2)
+(120)
+We would like to consider the most general PEPS
+with translational and rotational invariance, with physi-
+cal spaces containing all the irreps and virtual ones con-
+taining a single copy of each irrep (minimal construction
+- as explained above, to consider real physical scenarios
+one will most likely have to generalize in a straight for-
+ward manner and add more copies, as was necessary in
+the Z3 demonstration of Ref. [42]). Thus, the physi-
+cal and virtual spaces will be the same, two dimensional
+spin-like spaces spanned by the representation states|±⟩.
+The state will be parametrized by the tensors Ast
+lrdu, with
+s, t, l, r, d, u=±. The most general construction satisfy-
+ing these conditions is given by
+A++
+++++ =
+ = α
+A++
+−+−+ =
+ = β
+A−+
++−−+ =
+ = β
+A−−
++−+− =
+ = β
+A+−
+−++− =
+ = β
+A+−
+++−− =
+ = γ
+A−+
+−−++ =
+ = γ
+A−−
+−−−− =
+ = δ
+(121)
+
+23
+and the rest of the elements, which violate the symmetry,
+vanish. If we consider the |+⟩ states as ﬂux free states,
+and the |−⟩ as ﬂux carrying, we can interpret α as the
+amplitude of having no ﬂuxes going through the site, β
+as the amplitude of corner ﬂux, γ - of straight line ﬂuxes
+and δ - two intersecting ﬂux lines.
+Here we will be interested in the properties of the trans-
+fer operators constructed for such states, and the com-
+putation of the Wilson loop expectation value.
+A. The transfer operators
+The transfer operator ˆT may be simply built using (58)
+and (59).
+Let us identify the elements of the vector space
+spanned by the double legs of the transfer matrix. The
+on-leg transformations here admit the simple form θ⊗
+˜θ† = Z⊗ Z for the only group element which is not the
+identity; Since there are two irreps, we will have two on-
+leg singlets,
+|0 (+)⟩ =|++⟩≡|↑⟩⊗| s⟩
+|0 (−)⟩ =|−−⟩≡|↓⟩⊗| s⟩ (122)
+as well as two non-singlets,
+|1 (+,−)⟩ =|+−⟩≡|↑⟩⊗| n⟩
+|1 (−, +)⟩ =|−+⟩≡|↓⟩⊗| n⟩ (123)
+Where the new notation introduced in the two equations
+above factorizes the on-leg Hilbert space into the product
+of two spin spaces; one detects whether the state is an
+on-leg singlet (s) or not ( n) and the other labels the two
+states within each of these options by ↑ and↓.
+Using these states, we can write down all the relevant
+transfer operators and their reductions. For example,
+ˆτ0 =|α|2|0 (+)⟩⟨ 0 (+)|⊗| 0 (+)⟩⟨ 0 (+)| +|γ|2 (|0 (+)⟩⟨ 0 (+)|⊗| 0 (−)⟩⟨ 0 (−)| +|0 (−)⟩⟨ 0 (−)|⊗| 0 (+)⟩⟨ 0 (+)|)
++|δ|2|0 (−)⟩⟨ 0 (−)|⊗| 0 (−)⟩⟨ 0 (−)| +|β|2 (|0 (+)⟩⟨ 0 (−)| +|0 (−)⟩⟨ 0 (+)|)⊗ (|0 (+)⟩⟨ 0 (−)| +|0 (−)⟩⟨ 0 (+)|)
+(124)
+We can simplify by writing it in the matrix form, as well as adopting the new notation introduced in (122) and (123),
+ˆτ0 =
+lr / du |↑⟩⟨↑|⊗| s⟩⟨ s||↓⟩⟨↓|⊗| s⟩⟨ s||↑⟩⟨↓|⊗| s⟩⟨ s||↓⟩⟨↑|⊗| s⟩⟨ s|
+
+
+
+|↑⟩⟨↑|⊗| s⟩⟨ s| | α|2 |γ|2 0 0
+|↓⟩⟨↓|⊗| s⟩⟨ s| | γ|2 |δ|2 0 0
+|↑⟩⟨↓|⊗| s⟩⟨ s| 0 0 |β|2 |β|2
+|↓⟩⟨↑|⊗| s⟩⟨ s| 0 0 |β|2 |β|2
+(125)
+where the block structure is clearly seen; the ﬁrst one is the zeroth block, mixing only projection operators. It depends
+on α, γ, δ - the amplitudes for which ﬂuxes do not change directions, and thus the representations are not changed
+horizontally and vertically on the state, and the on-leg singlets are not ﬂipped on the transfer operators. The second
+block, where the representation / singlet change, depends on β - the turning (corner) ﬂux amplitude. Furthermore, as
+the parameter γ has to do with straight ﬂux lines going through the site, we expect that the larger it gets, the farther
+the ˆMµ operators derived from the zeroth block are from projection operators, and the farther we are from an area
+law; indeed, as we see, it appears on the oﬀ-diagonal terms of the zeroth block, and when γ = 0 the ˆMµ operators of
+the zeroth blocks are projectors.
+This matrix can be easily diagonalized as in (71), with the eigenvalues (not necessarily in descending order - this
+depends on the values of the parameters):
+λ1,2 = 1
+2
+(
+|α|2 +|δ|2±
+√(
+|α|2−| δ|2
+)2
++ 4|γ|2
+)
+,
+λ3 = 2|β|2 , λ 4 = 0
+(126)
+
+24
+with the diagonalizing matrix
+V =
+µ = 1 µ = 2 µ = 3 µ = 4
+
+
+
+
+|↑⟩⟨↑|⊗| s⟩⟨ s| u11 (α, γ, δ) u12 (α, γ, δ) 0 0
+|↓⟩⟨↓|⊗| s⟩⟨ s| u21 (α, γ, δ) u22 (α, γ, δ) 0 0
+|↑⟩⟨↓|⊗| s⟩⟨ s| 0 0 1√
+2 − 1√
+2
+|↓⟩⟨↑|⊗| s⟩⟨ s| 0 0 1√
+2
+1√
+2
+(127)
+Using all that, we obtain the operators ˆMµ as deﬁned in (73),
+ˆM1 = (u11 (α, γ, δ) Π↑ + u21 (α, γ, δ) Π↓) ,
+ˆM2 = (u12 (α, γ, δ) Π↑ + u22 (α, γ, δ) Π↓) ,
+ˆM3 = 1√
+2 σx,
+ˆM4 =− i√
+2 σy.
+(128)
+where Π↑ =|↑⟩⟨↑| and Π↓ =|↓⟩⟨↓| . Since V is orthogonal, they form an orthonormal basis as in (74). ˆM4 is irrelevant,
+since λ4 = 0; the |s⟩⟨ s| is also irrelevant since it multiplies everything, and hence we will omit it and refer to the
+operators ˆMµ as two dimensional. Note that as expected the ﬁrst two ones, ˆM1,2, having to do with the zeroth block,
+are diagonal, while the other ones are not.
+Similarly, we can compute and write down the other relevant matrices. Note that since the ﬂuxes have no orientation
+in our case, ˆτ→ = ˆτ←≡ ˆτ− and ˆτ↑ = ˆτ↓≡ ˆτ|. We thus require only six rather than eight further matrices. The ﬁrst is
+ˆτ− =
+lr / du Π ↑⊗| s⟩⟨ s| Π↓⊗| s⟩⟨ s| σ+⊗| s⟩⟨ s| σ−⊗| s⟩⟨ s|
+
+
+
+Π↑⊗| n⟩⟨ n| αγ γ δ 0 0
+Π↓⊗| n⟩⟨ n| γα δ γ 0 0
+σ+⊗| n⟩⟨ n| 0 0 |β|2 |β|2
+σ−⊗| n⟩⟨ n| 0 0 |β|2 |β|2
+(129)
+connecting operators acting on the non-singlet subspace in the horizontal direction with ones acting on the singlet
+space in the vertical one. The same block structure is apparent; the ﬁrst block is a generalization of the zeroth
+block - still only connecting projection operators, though acting on diﬀerent spaces, and the second block changes
+the representations. As in the τ0 case, the parameter γ is the one ”spoiling” the area law: all the amplitudes of ˆLµ
+operators which do not change the on-leg singlet eigenvalue subspace are proportional to it. One it is set to zero,
+when crossing a ﬂux line the subspace will change.
+We can formally perform a horizontal-vertical singular value decomposition and obtain an expression of the form
+ˆτ− = ∑
+µ
+ηµ ˆKµ⊗ ˆLµ. Since the horizontal operators act only within the non-singlet subspace and the vertical ones
+only within the singlet subspace, we can represent ˆKµ and ˆLµ by two dimensional matrices.
+ˆτ| is simply obtained by transposition,
+ˆτ| =
+lr / du Π ↑⊗| n⟩⟨ n| Π↓⊗| n⟩⟨ n| σ+⊗| n⟩⟨ n| σ−⊗| n⟩⟨ n|
+
+
+
+Π↑⊗| s⟩⟨ s| αγ γ α 0 0
+Π↓⊗| s⟩⟨ s| γδ δ γ 0 0
+σ+⊗| s⟩⟨ s| 0 0 |β|2 |β|2
+σ−⊗| s⟩⟨ s| 0 0 |β|2 |β|2
+(130)
+and ˆτ| = ∑
+µ
+ηµ ˆLµ⊗ ˆKµ.
+
+25
+Finally, let us consider the transfer operators of the four corners. We begin with the lower left corner
+ˆτ⌞ =
+lr / du Π ↑⊗| s⟩⟨ n| Π↓⊗| s⟩⟨ n| σ+⊗| s⟩⟨ n| σ−⊗| s⟩⟨ n|
+
+
+
+Π↑⊗| s⟩⟨ n| αβ γ β 0 0
+Π↓⊗| s⟩⟨ n| γβ δ β 0 0
+σ+⊗| s⟩⟨ n| 0 0 βα β γ
+σ−⊗| s⟩⟨ n| 0 0 βγ β δ
+(131)
+where in both dimensions we get a singlet input and obtain a non-singlet output. Here, after performing the singular
+value decomposition, we will also use two dimensional operators acting only on the ”spin space” since this corner
+operator connects to the right s/n subspaces. The other corner operators are
+ˆτ⌟ =
+lr / du Π ↑⊗| s⟩⟨ n| Π↓⊗| s⟩⟨ n| σ+⊗| s⟩⟨ n| σ−⊗| s⟩⟨ n|
+
+
+
+Π↑⊗| n⟩⟨ s| αβ γ β 0 0
+Π↓⊗| n⟩⟨ s| γβ δ β 0 0
+σ+⊗| n⟩⟨ s| 0 0 βγ β δ
+σ−⊗| n⟩⟨ s| 0 0 βα β γ
+(132)
+ˆτ⌝ =
+lr / du Π ↑⊗| n⟩⟨ s| Π↓⊗| n⟩⟨ s| σ+⊗| n⟩⟨ s| σ−⊗| n⟩⟨ s|
+
+
+
+Π↑⊗| n⟩⟨ s| αβ γ β 0 0
+Π↓⊗| n⟩⟨ s| γβ δ β 0 0
+σ+⊗| n⟩⟨ s| 0 0 βδ β γ
+σ−⊗| n⟩⟨ s| 0 0 βγ β α
+(133)
+and
+ˆτ⌜ =
+lr / du Π ↑⊗| n⟩⟨ s| Π↓⊗| n⟩⟨ s| σ+⊗| n⟩⟨ s| σ−⊗| n⟩⟨ s|
+
+
+
+Π↑⊗| s⟩⟨ n| αβ γ β 0 0
+Π↓⊗| s⟩⟨ n| γβ δ β 0 0
+σ+⊗| s⟩⟨ n| 0 0 βγ β α
+σ−⊗| s⟩⟨ n| 0 0 βδ β γ
+(134)
+Note that all the elements of the corner operators are proportional to either β or β, which is expected since β is the
+corner parameter, and it would be impossible to close a loop in its absence.
+B. Analytical example
+Let us set, for simplicity, γ = 0. Consider τ0 (125) and the ˆMµ operators derived from it (128). Let us set γ = 0;
+then we simply have
+ˆM1 = Π↑, ˆM2 = Π↓, ˆM3 = 1√
+2 σx, ˆM4 =− i√
+2 σy. (135)
+as well as
+λ1 =|α|2 , λ 2 =|δ|2 , λ 3 = 2|β|2 , λ 4 = 0 (136)
+
+26
+The choice of γ = 0 sets all the zeroth block ˆMµ operators to projectors onto orthogonal states, and the ﬂux-free
+transfer matrix from (75) takes the form
+ˆE =|α|2N Π↑⊗···⊗ Π↑ +|δ|2N Π↓⊗···⊗ Π↓+
++|β|4
+N −1∑
+n=1
+∑
+m
+|α|2(N −n−1)|δ|2(n−1) Π↑⊗···⊗ Π↑⊗ σx
+m
+⊗Π↓⊗···⊗ Π↓⊗ σx
+m+n
+⊗Π↑⊗···⊗ Π↑+
++|β|4
+N −1∑
+n=1
+∑
+m
+|δ|2(N −n−1)|α|2(n−1) Π↓⊗···⊗ Π↓⊗ σx
+m
+⊗Π↑⊗···⊗ Π↑⊗ σx
+m+n
+⊗Π↓⊗···⊗ Π↓ + O
+(
+|β|8
+)
+(137)
+If we further assume that |β|≪| α| ,|δ| we ﬁnd ourselves in the perturbative case discussed above, and may use
+perturbation theory for ﬁnding the eigenvectors of ˆE. The zeroth, unperturbed part is in the ﬁrst row of (137), from
+which we ﬁnd two approximate, zeroth order eigenvectors,
+⟨w1| =⟨↑|⊗···⊗⟨↑| , ⟨w2| =⟨↓|⊗···⊗⟨↓| (138)
+with zeroth order eigenvalues
+ρ1 =|α|2N , ρ 2 =|δ|2N (139)
+- which are the two highest ones. Let us set, without losing generality, |α| >|δ| (one can easily invert that in the
+following discussion). The leading order corrections to the eigenvalues will be second order ( ∝ |β|8) and to the
+eigenvectors will be of the ﬁrst order (∝| β|4); we shall neglect them both. The norm of the state is then
+⟨ψ|ψ⟩ = Tr
+[
+EN ]
+−→
+N ≫1
+ρN
+1 =|α|2N 2
+(140)
+That is, the torus is tiled with N 2 sites, each contributing a factor of |α|2 to the norm.
+Let us now move on to the ﬂux carrying transfer matrices. Looking at the straight ﬂux ones ˆ τ− (129) and ˆτ| (130),
+we see that our choice of γ = 0 sets the zeroth block to zero. This implies that they will ﬂip the local incoming spins
+in both directions - in particular in the direction orthogonal to the ﬂux; i.e., the eigenspace of ˆ τ0 out of the loop will
+be connected to the orthogonal one within the loop, eventually to give rise to an area law, unless |α| =|δ|. We see
+that
+ˆτ− = ˆτ| =|β|2 σx⊗ σx (141)
+(ignoring the n, s space for the reasons explained above) - inverting the spins in the orthogonal direction to the ﬂux
+lines, that is, changing indeed from the α to the δ sector and vice versa.
+For the corners we get
+ˆτ⌞ = αβΠ↑⊗ Π↑ + δβΠ↓⊗ Π↓ + βασ+⊗ σ+ + βδσ−⊗ σ−≡
+∑
+µ
+ξ⌞,µ ˆH⌞,µ⊗ ˆV⌞,µ
+ˆτ⌟ = αβΠ↑⊗ Π↑ + δβΠ↓⊗ Π↓ + βδσ+⊗ σ− + βασ−⊗ σ+≡
+∑
+µ
+ξ⌟,µ ˆH⌟,µ⊗ ˆV⌟,µ
+ˆτ⌝ = αβΠ↑⊗ Π↑ + δβΠ↓⊗ Π↓ + βδσ+⊗ σ+ + βασ−⊗ σ−≡
+∑
+µ
+ξ⌝,µ ˆH⌝,µ⊗ ˆV⌝,µ
+ˆτ⌜ = αβΠ↑⊗ Π↑ + δβΠ↓⊗ Π↓ + βασ+⊗ σ− + βδσ−⊗ σ+≡
+∑
+µ
+ξ⌜,µ ˆH⌜,µ⊗ ˆV⌜,µ
+(142)
+Let us consider the action of the lower row of the Wilson loop, ˆEb (R1) on the input state ⟨w1| with the highest
+eigenvalue, identifying without loss of generality, as usual, the origin of the torus with the lower left corner of the
+loop. We get
+ˆEb (R1) =|α|2(N −R1−1)|β|2(R1−1) ∑
+µ,ν
+ξ⌞,µξ⌟,νTr
+[
+ˆH⌞,µσR1−1
+x ˆH⌟,νΠ↑
+]
+ˆV⌞,µ⊗ σx⊗···⊗ σx  
+R1−1
+⊗ ˆV⌟,ν⊗ Π↑⊗···⊗ Π↑  
+N −R1−1
++...
+(143)
+where the omitted terms either annihilate ⟨w1| or are of negligible magnitude.
+Some of the µ, ν conﬁgurations give rise to a zero trace. Others annihilate the input vector ⟨wi|. There are only
+four possible valid conﬁgurations:
+
+27
+1. R1 is even, ˆH⌞,µ = σ+, ˆH⌟,ν = Π↑ and thus ˆV⌞,µ = σ+, ˆV⌟,ν = Π↑ and ξ⌞,µξ⌟,ν =
+⏐⏐αβ
+⏐⏐2
+.
+2. R1 is even, ˆH⌞,µ = Π↑, ˆH⌟,ν = σ− and thus ˆV⌞,µ = Π↑, ˆV⌟,ν = σ+ and ξ⌞,µξ⌟,ν =
+⏐⏐αβ
+⏐⏐2
+.
+3. R1 is odd, ˆH⌞,µ = Π↑, ˆH⌟,ν = Π↑ and thus ˆV⌞,µ = Π↑, ˆV⌟,ν = Π↑ and ξ⌞,µξ⌟,ν =
+(
+αβ
+)2
+.
+4. R1 is odd, ˆH⌞,µ = σ+, ˆH⌟,ν = σ− and thus ˆV⌞,µ = σ+, ˆV⌟,ν = σ+ and ξ⌞,µξ⌟,ν = (βα)2.
+The leading terms of the output vector ⟨w1| ˆEb (R) are product vectors, with ⟨↓| entering the loop and ⟨↑| out of it.
+The two spins which are on the loop’s boundaries are either ﬂipped or not, depending on the particular conﬁguration
+from the list above. We get for an even R1
+⟨w1| ˆEb (R1) =|α|2N
+⏐⏐⏐⏐
+β
+α
+⏐⏐⏐⏐
+2R1
+
+⟨↓|⊗⟨↓|⊗···⊗⟨↓|  
+R1−1
+⊗⟨↑|⊗⟨↑|⊗···⊗⟨↑|  
+N −R1−1
++⟨↑|⊗⟨↓|⊗···⊗⟨↓|  
+R1−1
+⊗⟨↓|⊗⟨↑|⊗···⊗⟨↑|  
+N −R1−1
+
+
+(144)
+and for an odd R1
+⟨w1| ˆEb (R1) =|α|2N
+⏐⏐⏐⏐
+β
+α
+⏐⏐⏐⏐
+2R1
+[ (
+αβ⏐⏐αβ
+⏐⏐
+)2
+⟨↑|⊗⟨↓|⊗···⊗⟨↓|  
+R1−1
+⊗⟨↑|⊗⟨↑|⊗···⊗⟨↑|  
+N −R1−1
++
++
+( βα
+|βα|
+)2
+⟨↓|⊗⟨↓|⊗···⊗⟨↓|  
+R1−1
+⊗⟨↓|⊗⟨↑|⊗···⊗⟨↑|  
+N −R1−1
+] (145)
+We move on to the intermediate rows, with
+ˆE∥ (R1) =|α|2(N −R1−1)|δ|2(R1−1)|β|4 σx⊗ Π↓⊗···⊗ Π↓  
+R1−1
+⊗σx⊗ Π↑⊗···⊗ Π↑  
+N −R1−1
++... (146)
+where, once again, the terms not included are either small enough or annihilate the input vector. The highest
+eigenvalue (in absolute value) is
+ρ′
+1 (R) =|α|2(N −1)
+⏐⏐⏐⏐
+β2
+δ
+⏐⏐⏐⏐
+2 ⏐⏐⏐⏐
+δ
+α
+⏐⏐⏐⏐
+2R1
+(147)
+- exponential in the distanceR1, just as speculated in (114), with Γ =|α|2(N −1)
+⏐⏐⏐β2
+δ
+⏐⏐⏐
+2
+, and string tension κ =−2 log
+⏐⏐δ
+α
+⏐⏐
+- predicting an area law behaviour.
+This eigenvalue is four-fold degenerate (in absolute value). Denoting by |x =±1⟩ the eigenvectors of σx, with
+eigenvalues±1, we get the four eigenvectors,
+⣨
+w′x,x′
+1 (R)
+⏐⏐⏐ =⟨x|⊗⟨↓|⊗···⊗⟨↓|  
+R1−1
+⊗⟨ x′|⊗⟨↑|⊗···⊗⟨↑|  
+N −R1−1
+, s.t.
+⣨
+w′x,x′
+1 (R)
+⏐⏐⏐ ˆE∥ (R1) = xx′ρ′
+1 (R)
+⣨
+w′x,x′
+1 (R)
+⏐⏐⏐
+(148)
+Note that since the transfer matrices ˆE and ˆE∥ (R1) are hermitian,|vi⟩ =|wi⟩ and|v′
+i (R)⟩ =|w′
+i (R)⟩.
+Connecting with the inputs (144) and (145) and using ⟨↑| x⟩ = 1/
+√
+2 and⟨↓| x⟩ = x/
+√
+2 we obtain for an even R1
+⟨w1| ˆEb (R1)
+⏐⏐⏐v′x,x′
+1 (R1)
+⟩
+=|α|2N
+⏐⏐⏐⏐
+β
+α
+⏐⏐⏐⏐
+2R1
+(⟨↓| x⟩⟨↑| x′⟩ +⟨↑| x⟩⟨↓| x′⟩)
+= 1
+2|α|2N
+⏐⏐⏐⏐
+β
+α
+⏐⏐⏐⏐
+2R1
+(x + x′)≡ 1
+2|α|2N
+⏐⏐⏐⏐
+β
+α
+⏐⏐⏐⏐
+2R1
+feven (x, x′)
+(149)
+and for an odd one
+⟨w1| ˆEb (R1)
+⏐⏐⏐v′x,x′
+1 (R1)
+⟩
+=|α|2N
+⏐⏐⏐⏐
+β
+α
+⏐⏐⏐⏐
+2R1
+
+
+(
+αβ⏐⏐αβ
+⏐⏐
+)2
+⟨↑| x⟩⟨↑| x′⟩ +
+( βα
+|βα|
+)2
+⟨↓| x⟩⟨↓| x′⟩
+
+
+= 1
+2|α|2N
+⏐⏐⏐⏐
+β
+α
+⏐⏐⏐⏐
+2R1
+
+
+(
+αβ⏐⏐αβ
+⏐⏐
+)2
++ xx′
+( βα
+|βα|
+)2
+
+≡ 1
+2|α|2N
+⏐⏐⏐⏐
+β
+α
+⏐⏐⏐⏐
+2R1
+fodd (x, x′)
+(150)
+
+28
+We close the Wilson loop with ˆEt (R1), where we consider the leading terms which do not annihilate the input
+vectors
+⣨
+w′x,x′
+1 (R)
+⏐⏐⏐ or the output vector⟨w1|,
+ˆEt (R1) =|α|2(N −R1−1)|β|2(R1−1) ∑
+µ,ν
+ξ⌜,µξ⌝,νTr
+[
+ˆH⌜,µσR1−1
+x ˆH⌝,νΠ↑
+]
+ˆV⌜,µ⊗ σx⊗···⊗ σx  
+R1−1
+⊗ ˆV⌝,ν⊗ Π↑⊗···⊗ Π↑  
+N −R1−1
++...
+(151)
+Once again there are four possible cases:
+1. R1 is even, ˆH⌜,µ = σ+, ˆH⌝,ν = Π↑ and thus ˆV⌜,µ = σ−, ˆV⌝,ν = Π↑ and ξ⌜,µξ⌝,ν =
+⏐⏐αβ
+⏐⏐2
+.
+2. R1 is even, ˆH⌜,µ = Π↑, ˆH⌝,ν = σ− and thus ˆV⌜,µ = Π↑, ˆV⌝,ν = σ− and ξ⌜,µξ⌝,ν =
+⏐⏐αβ
+⏐⏐2
+.
+3. R1 is odd, ˆH⌜,µ = Π↑, ˆH⌝,ν = Π↑ and thus ˆV⌜,µ = Π↑, ˆV⌝,ν = Π↑ and ξ⌜,µξ⌝,ν =
+(
+αβ
+)2
+.
+4. R1 is odd, ˆH⌜,µ = σ+, ˆH⌝,ν = σ− and thus ˆV⌜,µ = σ−, ˆV⌝,ν = σ− and ξ⌜,µξ⌝,ν = (βα)2.
+Implying that for an even R1
+ˆEt (R1)|v1⟩ =|α|2N
+⏐⏐⏐⏐
+β
+α
+⏐⏐⏐⏐
+2R1
+
+|↓⟩⊗|↓⟩⊗···⊗|↓⟩  
+R1−1
+⊗|↑⟩⊗|↑⟩⊗···⊗|↑⟩  
+N −R1−1
++|↑⟩⊗|↓⟩⊗···⊗|↓⟩  
+R1−1
+⊗|↓⟩⊗|↑⟩⊗···⊗|↑⟩  
+N −R1−1
+
+
+(152)
+and for an odd R1
+ˆEt (R1)|v1⟩ =|α|2N
+⏐⏐⏐⏐
+β
+α
+⏐⏐⏐⏐
+2R1 [ (
+αβ⏐⏐αβ
+⏐⏐
+)2
+|↑⟩⊗|↓⟩⊗···⊗|↓⟩  
+R1−1
+⊗|↑⟩⊗|↑⟩⊗···⊗|↑⟩  
+N −R1−1
++
+( βα
+|βα|
+)2
+|↓⟩⊗|↓⟩⊗···⊗|↓⟩  
+R1−1
+⊗|↓⟩⊗|↑⟩⊗···⊗|↑⟩  
+N −R1−1
+] (153)
+Giving rise to, for an even R1
+⣨
+w′x,x′
+1 (R1)
+⏐⏐⏐ ˆEt (R1)|v1⟩ =|α|2N
+⏐⏐⏐⏐
+β
+α
+⏐⏐⏐⏐
+2R1
+(⟨x|↓⟩⟨ x′|↑⟩ +⟨x|↑⟩⟨ x′|↓⟩ )
+= 1
+2|α|2N
+⏐⏐⏐⏐
+β
+α
+⏐⏐⏐⏐
+2R1
+(x + x′) = 1
+2|α|2N
+⏐⏐⏐⏐
+β
+α
+⏐⏐⏐⏐
+2R1
+feven (x, x′)
+(154)
+and for an odd one
+⣨
+w′x,x′
+1 (R1)
+⏐⏐⏐ ˆEt (R1)|v1⟩ =|α|2N
+⏐⏐⏐⏐
+β
+α
+⏐⏐⏐⏐
+2R1
+
+
+(
+αβ⏐⏐αβ
+⏐⏐
+)2
+⟨x|↑⟩⟨ x′|↑⟩ +
+( βα
+|βα|
+)2
+⟨x|↓⟩⟨ x′|↓⟩
+
+
+= 1
+2|α|2N
+⏐⏐⏐⏐
+β
+α
+⏐⏐⏐⏐
+2R1
+
+
+(
+αβ⏐⏐αβ
+⏐⏐
+)2
++ xx′
+( βα
+|βα|
+)2
+
+ = 1
+2|α|2N
+⏐⏐⏐⏐
+β
+α
+⏐⏐⏐⏐
+2R1
+fodd (x, x′)
+(155)
+We are ﬁnally ready to obtain the Wilson loop expectation value using the procedure of section V C. We will have
+to slightly modify it, since in our case the highest eigenvalue of ˆE∥ is only degenerate in absolute value; for large loops
+in the thermodynamic limit we thus modify Eq. (110) to
+⟨W (R1, R2)⟩ = ρ′R2−1
+1 (R1)
+ρR2+1
+1
+∑
+x,x′
+(xx′)R2−1⟨w1| ˆEb (R1)
+⏐⏐⏐v′x,x′
+1 (R1)
+⟩ ⣨
+w′x,x′
+1 (R1)
+⏐⏐⏐ ˆEt (R1)|v1⟩
+= 1
+4
+⏐⏐⏐⏐
+αδ
+β2
+⏐⏐⏐⏐
+2 ⏐⏐⏐⏐
+δ
+α
+⏐⏐⏐⏐
+2R1R2 ⏐⏐⏐⏐
+β2
+αδ
+⏐⏐⏐⏐
+2(R1+R2) ∑
+x,x′
+(xx′)R2−1 f2
+p (x, x′)
+(156)
+
+29
+where p = even,odd is the parity of R1.
+One can already clearly see the area and perimeter dependent parts. The only thing left to do is to complete the
+computation of the sum, where four diﬀerent cases have to be considered, corresponding to the parities of R1, R2.
+It is straightforward to see that if the area is even (three of the four cases), the resulting number is 8, while if the
+area is odd, the result is 8Re
+(
+αβ
+|αβ|
+)4
+. Altogether we obtain, for large loops in the thermodynamic limit, for the
+|β|≪| δ| <|α| and γ = 0 case, that
+⟨W (R1, R2)⟩ =
+
+
+
+2
+⏐⏐⏐αδ
+β2
+⏐⏐⏐
+2 ⏐⏐δ
+α
+⏐⏐2R1R2
+⏐⏐⏐β2
+αδ
+⏐⏐⏐
+2(R1+R2)
+, R 1R2 is even
+2
+⏐⏐⏐αδ
+β2
+⏐⏐⏐
+2 ⏐⏐δ
+α
+⏐⏐2R1R2
+⏐⏐⏐β2
+αδ
+⏐⏐⏐
+2(R1+R2)
+Re
+(
+αβ
+|αβ|
+)4
+, R 1R2 is odd
+(157)
+The Creutz parameter (38) is nothing but the string ten-
+sion,
+χ = κ =−2 log
+⏐⏐⏐⏐
+δ
+α
+⏐⏐⏐⏐ (158)
+We see that we have an area law, or a conﬁning phase,
+as long as |δ|̸ =|α|. While we excluded an equality in
+our arguments above, indeed we will have no area law
+if these two parameters are equal: then, the eigenvec-
+tors of ˆE between which the ﬂuxes transfer will have the
+same eigenvalue which does not allow for an area law, in
+full accordance with our general discussion. If we switch
+γ on, it will have two eﬀects: one will contaminate the
+eigenvectors of the transfer matrix ˆE, taking them far-
+ther from product vectors until the area law is broken,
+as well introduce terms in the ﬂux-carrying transfer ma-
+trices that do not change the eigenvalue sector of ˆ τ0 -
+violating another area law criterion.
+C. Numerical examples
+We will now present a few more examples which are
+computed numerically, using exact contraction, on a
+torus with size N1 = 8 ×N 2 = 100. We considered
+diﬀerent choices of parameters to demonstrate diﬀerent
+behaviours; for each, we computed expectation value of
+the Wilson loop for several large loops. We extracted the
+parameters κA and κP as follows: using the expression
+(39) for a Wilson loop, we may deﬁne a function of R2
+depending on R1 as a parameter,
+f (R2) =− log⟨W (R1, R2)⟩ = f1 (R1) R2 + f0 (R1)
+(159)
+It is a linear function, which intersects with the vertical
+axis at
+f0 (R1) = κP R1− log W0 (160)
+whose slope is
+f1 (R1) = κAR1 + κP (161)
+In the case of a perimeter law, the slope function will
+be constant, f1 (R1) = κP and when plotting f (R2) for
+diﬀerent R1 values, parallel lines will be obtained. In the
+case of an area law, the lines will have diﬀerent slopes.
+Thus, κA and κP may be extracted by performing lin-
+ear ﬁts to the functions f1,2 (R1). Moreover, we have
+extracted the Creutz parameter too.
+The ﬁrst set of parameters we examine is α = 1, β =
+0.1, γ = 0 , δ = 0 .95. This choice is within the pertur-
+bative class studied above. It shows an area law, as
+can be seen from Fig. 10 and the Creutz parameter
+χ = κ = −2 log
+⏐⏐δ
+α
+⏐⏐ ≈ 0.1025 (as shown in Fig. 11).
+The expected exponential dependence of the eigenvalues
+of ˆE∥ (R) is demonstrated in Fig. 12.
+Next, let us consider another example which lies within
+the perturbative regime: α = 1 , β = 0 .1, γ = 0 , δ = 1.
+Here still γ = 0 and β is very small, so the eigenvectors
+of ˆE would be product vectors, hence satisfying the ﬁrst
+criterion for an area law. However, the eigenvalues of ˆτ0
+are degenerate, implying no area law (the second criterion
+is violated). The perimeter law is clearly shown in Fig.
+13, and, as as one can see in Fig. 14, the eigenvalues of
+ˆE∥ (R) have no dependence on R.
+Finally, we consider a completely diﬀerent case, where
+α = 0 .1, β = 0 .1, γ = 1 , δ = 0 .3. For this choice of
+parameters, the previous perturbative treatment is not
+valid. The eigenvalues associated with ˆτ0 are
+λ1≈ 1.05, λ 2≈− 0.95, λ 3 = 0.02, λ 4 = 0 (162)
+associated with the operators
+ˆM1≈
+(
+0.6928 0
+0 0 .7211
+)
+, ˆM2≈
+(
+−0.7211 0
+0 0 .6928
+)
+,
+ˆM3 = 1√
+2 σx, ˆM4 =− i√
+2 σy
+(163)
+- here, too, the most signiﬁcant contributions are from
+the zeroth block with diagonal operators (the ﬁrst two);
+however, they are far away from being projectors, hence
+we do not expect the eigenvectors of ˆE to be anywhere
+close to product vectors.
+Let as also consider the straight ﬂux carrying transfer
+
+30
+Figure 10. The α = 1 , β = 0 .1, γ = 0 , δ = 0 .95, which lies
+within the perturbative class discussed above, clearly shows
+an area law. It can be seen qualitatively on the top, where
+− log⟨W (R1, R2)⟩ is plotted as a function of R2 for three
+diﬀerent values of R1 - resulting in three non-parallel lines.
+And if it is hard to detect the diﬀerent slopes on the top, the
+middle ﬁgure shows it more quantitatively: the slope function
+f1 (R1)≈ 0.126R1 + 9.1078 has a nonzero slope κA≈ 9.1078,
+and its intersection with the vertical axis is κP≈ 9.1078, the
+slope of the function plotted on the bottom, f0 (R1).
+operator ˆτ− and to ˆτ|. We ﬁnd the singular values
+η1≈ 0.4472, η 2 = 0.02, η 3 = η4 = 0, (164)
+Figure 11. Computation of the Creutz Parameter χ (R1, R2)
+for α = 1, β = 0.1, γ = 0, δ = 0.95, for diﬀerent values of R1
+and R2. As can be seen, the values converge to the predicted
+value (thanks to the validity of the perturbative treatment in
+this parameter regime) of −2 log
+⏐⏐δ
+α
+⏐⏐≈ 0.1025.
+Figure 12. In the perturbative case worked out analytically,
+α = 1 , β = 0 .1, γ = 0 , δ = 0 .95, the highest eigenvalue of
+the intermediate transfer matrix ˆE∥ (R) depend exponentially
+on the width R, as can be seen from the logarithmic plot
+given above, where the two highest eigenvalues (in absolute
+value, both degenerate in this case) are plotted for all values
+of R. The symmetric shape is due to the ﬁniteness of the
+system (N = 8 in this case). For R≤ 4, the eigenvectors
+corresponding to highest eigenvalue connects with the right
+input state, while for R≥ 4 the next ones are relevant - all due
+to the symmetry. Also shown is a linear ﬁt, computed with
+respect to the parameters predicted using the perturbative
+treatment.
+associated, in the ﬂux direction, with the operators
+ˆK1 =− 1√
+2 1, ˆK2 =− 1√
+2 σx,
+ˆK3 =− 1√
+2 σz, ˆK4 =− i√
+2 σy
+(165)
+and, in the direction orthogonal to the ﬂux, with the
+operators
+ˆL1≈
+(
+−0.3162 0
+0 −0.9487
+)
+, ˆL2 =− 1√
+2 σx,
+ˆL3≈
+(
+−0.9487 0
+0 0 .3162
+)
+, ˆL4 =− i√
+2 σy
+(166)
+which imply that even if our eigenvectors were product
+
+31
+Figure 13. The α = 1, β = 0.1, γ = 0, δ = 1 case does not allow for an area law because of the degeneracy in the eigenvalues of
+ˆτ0 corresponding to projection operators. The state shows a perimeter law, which can be seen qualitatively on the left, where
+− log⟨W (R1, R2)⟩ is plotted as a function of R2 for three diﬀerent values of R1 - resulting in three parallel lines. Quantitatively
+we see in the middle, where the three slopes of the three lines are plotted, that they are equal: f1 (R1) = κP ≈ 9.2103 is a
+constant function (κA = 0). On the right we see the ﬁt of f0 (R1)≈ 9.2103 (R1− 1).
+Figure 14. The α = 1 , β = 0 .1, γ = 0 , δ = 1 case does not
+allow for an area law because of the degeneracy in the eigen-
+values of ˆτ0 corresponding to projection operators. This is
+also manifested by the fact that the eigenvalues of the inter-
+mediate transfer matrix, ˆE∥ (R), are completely independent
+of the distance R, as illustrated here.
+vectors (which they are not), the most prominent contri-
+bution, coming from η1, would be diagonal in the sub-
+sector (as seen from ˆL1). Therefore all our area law cri-
+teria are violated. Indeed, this set of parameters show a
+perimeter law decay of the Wilson loop, as can be seen
+in Fig. 15, in the zero Creutz parameter (see Fig. 16)
+and in the eigenvalues of ˆE∥ (R) which are independent
+of R (as shown in Fig. 17).
+VII. SUMMARY
+In this work we have seen how local properties of two
+dimensional lattice gauge theory PEPS, manifested in
+their transfer operators (on-site) and matrices (rows)
+simplify their contraction and dictate their long-range,
+Wilson loop behaviour. We have related the area law
+with transfer matrices whose eigenvectors are product
+vectors - that is, a product of local contributions of the
+Figure 15. The α = 0 .1, β = 0 .1, γ = 1 , δ = 0 .3 case shows
+a perimeter law, which can be seen qualitatively on the top,
+where− log⟨W (R1, R2)⟩ is plotted as a function of R2 for
+three diﬀerent values of R1 - resulting in three parallel lines.
+Quantitatively we see on the bottom, where the three slopes
+of the three lines are plotted, that they are equal.
+transfer operators on each side, manifesting the lack of
+long-range order, as expected for a disordered, conﬁning
+phase. The perimeter law, appearing in ordered phases,
+has to do with non-product eigenvectors, where the sep-
+arate sites contribute in a correlated, long-ordered man-
+
+32
+Figure 16. Another probe for the perimeter law of the α =
+0.1, β = 0.1, γ = 1, δ = 0.3 case is the zero Creutz parameter,
+as plotted here (the plotted results are not exactly zero due
+to the fact our loops are not very large).
+Figure 17. In the perimeter law case of α = 0.1, β = 0.1, γ =
+1, δ = 0.3 case, as expected, the eigenvalues of the intermedi-
+ate transfer matrix ˆE∥ (R) are independent of R.
+ner. These results may be used for detecting phases of
+PEPS used for pure gauge theory studies, and for the
+design of PEPS used as ansatz states for such scenarios.
+One possible extension is the inclusion of dynamical
+matter - which is diﬀerent from the current work both in
+the mathematical sense (diﬀerent structure of the ten-
+sors, implying diﬀerent symmetry properties) and the
+physical one (in that case, at least with fermionic matter
+as in conventional standard model scenarios, the Wilson
+loop does not serve as an order parameter for conﬁne-
+ment any more). This could possibly connected with the
+formalism of gauged Gaussian fermionic PEPS [31, 32]
+which can be contracted using sign-problem free Monte-
+Carlo techniques [33, 37] both for the study of further
+examples and application to physical models of interest.
+Another important and relevant generalization is the
+extension to higher dimensions, where further geometry
+arguments have to be taken into account, potentially con-
+taining many further interesting physical and mathemat-
+ical properties.
+ACKNOWLEDGEMENTS
+I would like to thank J.I. Cirac, P. Emonts, A. Mol-
+nar and T. B. Wahl for fruitful discussions and N. C.
+Hallakoun for her technical support. This research was
+supported by the Israel Science Foundation (grant No.
+523/20).
+[1] R. Or´ us, A practical introduction to tensor networks:
+Matrix product states and projected entangled pair
+states, Annals of Physics 349, 117 (2014).
+[2] S. White, Density matrix formulation for quantum renor-
+malization groups, Physical Review Letters 69, 2863
+(1992).
+[3] F. Verstraete, V. Murg, and J. Cirac, Matrix product
+states, projected entangled pair states, and variational
+renormalization group methods for quantum spin sys-
+tems, Advances in Physics 57, 143 (2008).
+[4] J. Cirac, D. Perez-Garcia, N. Schuch, and F. Ver-
+straete, Matrix product states and projected entan-
+gled pair states: Concepts, symmetries, and theorems,
+arXiv:2011.12127 [quant-ph] (2020).
+[5] M. Sanz, M. M. Wolf, D. P´ erez-Garc´ ıa, and J. I. Cirac,
+Matrix product states: Symmetries and two-body hamil-
+tonians, Phys. Rev. A 79, 042308 (2009).
+[6] A. Molnar, J. Garre-Rubio, D. P´ erez-Garc´ ıa, N. Schuch,
+and J. Cirac, Normal projected entangled pair states
+generating the same state, New Journal of Physics 20,
+113017 (2018).
+[7] K. Wilson, Conﬁnement of quarks, Physical Review D
+10, 2445 (1974).
+[8] D. Gross and F. Wilczek, Ultraviolet Behavior of Non-
+Abelian Gauge Theories, Physical Review Letters 30,
+1343 (1973).
+[9] S. Aoki, Y. Aoki, D. Beˇ cirevi´ c, T. Blum, G. Colangelo,
+S. Collins, M. Della Morte, P. Dimopoulos, S. D¨ urr,
+H. Fukaya, M. Golterman, S. Gottlieb, R. Gupta,
+S. Hashimoto, U. M. Heller, G. Herdoiza, R. Hors-
+ley, A. J¨ uttner, T. Kaneko, C.-J. D. Lin, E. Lunghi,
+R. Mawhinney, A. Nicholson, T. Onogi, C. Pena,
+A. Portelli, A. Ramos, S. R. Sharpe, J. N. Simone,
+S. Simula, R. Sommer, R. Van de Water, A. Vladikas,
+U. Wenger, and H. Wittig, Flag review 2019, The Euro-
+pean Physical Journal C 80, 113 (2020).
+[10] K. Fukushima and T. Hatsuda, The phase diagram of
+dense QCD, Reports on Progress in Physics 74, 014001
+(2011).
+[11] P. Silvi, E. Rico, T. Calarco, and S. Montangero, Lat-
+tice gauge tensor networks, New Journal of Physics 16,
+103015 (2014).
+[12] I. Kull, A. Molnar, E. Zohar, and J. Cirac, Classiﬁcation
+of matrix product states with a local (gauge) symmetry,
+Ann. Phys. 386, 199 (2017).
+[13] M. Ba˜ nuls, K. Cichy, J. Cirac, and K. Jansen, The
+mass spectrum of the Schwinger model with matrix
+product states, Journal of High Energy Physics 2013,
+10.1007/JHEP11(2013)158 (2013).
+[14] B. Buyens, J. Haegeman, K. Van Acoleyen, H. Ver-
+schelde, and F. Verstraete, Matrix Product States for
+Gauge Field Theories, Physical Review Letters 113,
+10.1103/PhysRevLett.113.091601 (2014).
+[15] E. Rico, T. Pichler, M. Dalmonte, P. Zoller, and S. Mon-
+tangero, Tensor Networks for Lattice Gauge Theories and
+Atomic Quantum Simulation, Physical Review Letters
+112, 10.1103/PhysRevLett.112.201601 (2014).
+[16] H. Saito, M. C. Ba˜ nuls, K. Cichy, J. I. Cirac, and
+K. Jansen, The temperature dependence of the chiral
+condensate in the Schwinger model with Matrix Prod-
+
+33
+uct States, arXiv:1412.0596; PoS(LATTICE2014)302
+(2014).
+[17] M. C. Ba˜ nuls, K. Cichy, J. I. Cirac, K. Jansen, and
+H. Saito, Thermal evolution of the Schwinger model
+with matrix product operators, Physical Review D 92,
+10.1103/PhysRevD.92.034519 (2015).
+[18] M. C. Ba˜ nuls, K. Cichy, K. Jansen, and H. Saito, Chiral
+condensate in the Schwinger model with matrix product
+operators, Phys. Rev. D 93, 094512 (2016).
+[19] B. Buyens, F. Verstraete, and K. Van Acoleyen, Hamil-
+tonian simulation of the Schwinger model at ﬁnite
+temperature, Physical Review D 94, 10.1103/Phys-
+RevD.94.085018 (2016).
+[20] M. C. Ba˜ nuls, K. Cichy, J. I. Cirac, K. Jansen, and
+S. K¨ uhn, Eﬃcient Basis Formulation for ( 1 + 1 )-
+Dimensional SU(2) Lattice Gauge Theory: Spectral Cal-
+culations with Matrix Product States, Physical Review
+X 7, 10.1103/PhysRevX.7.041046 (2017).
+[21] S. K¨ uhn, E. Zohar, J. Cirac, and M. Ba˜ nuls, Non-Abelian
+string breaking phenomena with matrix product states,
+Journal of High Energy Physics 2015, 1 (2015).
+[22] T. Pichler, M. Dalmonte, E. Rico, P. Zoller, and S. Mon-
+tangero, Real-Time Dynamics in U(1) Lattice Gauge
+Theories with Tensor Networks, Phys. Rev. X 6, 011023
+(2016).
+[23] B. Buyens, J. Haegeman, F. Hebenstreit, F. Verstraete,
+and K. Van Acoleyen, Real-time simulation of the
+Schwinger eﬀect with matrix product states, Physical Re-
+view D 96, 10.1103/PhysRevD.96.114501 (2017).
+[24] M. Ba˜ nuls, K. Cichy, J. Cirac, K. Jansen, S. K¨ uhn, and
+H. Saito, The multi-ﬂavor Schwinger model with chemi-
+cal potential - Overcoming the sign problem with Matrix
+Product States, arXiv:1611.01458 [hep-lat] (2016).
+[25] P. Silvi, E. Rico, M. Dalmonte, F. Tschirsich, and
+S. Montangero, Finite-density phase diagram of a ( 1
++ 1 ) - d non-abelian lattice gauge theory with tensor
+networks, Quantum 1, 9 (2017).
+[26] M. Ba˜ nuls, K. Cichy, J. Cirac, K. Jansen, and S. K¨ uhn,
+Density Induced Phase Transitions in the Schwinger
+Model: A Study with Matrix Product States, Phys. Rev.
+Lett. 118, 071601 (2017).
+[27] Ba˜ nuls, M.C., Cichy, Krzysztof, Cirac, J., Jansen, K.,
+K¨ uhn, S., and Saito, H., Towards overcoming the Monte
+Carlo sign problem with tensor networks, EPJ Web Conf.
+137, 04001 (2017).
+[28] M. C. Ba˜ nuls and K. Cichy, Review on novel methods
+for lattice gauge theories, Reports on Progress in Physics
+83, 024401 (2020).
+[29] L. Tagliacozzo and G. Vidal, Entanglement renormal-
+ization and gauge symmetry, Phys. Rev. B 83, 115127
+(2011).
+[30] L. Tagliacozzo, A. Celi, and M. Lewenstein, Tensor
+Networks for Lattice Gauge Theories with Continuous
+Groups, Phys. Rev. X 4, 041024 (2014).
+[31] E. Zohar, M. Burrello, T. Wahl, and J. Cirac, Fermionic
+projected entangled pair states and local U(1) gauge the-
+ories, Annals of Physics 363, 385 (2015).
+[32] E. Zohar, T. Wahl, M. Burrello, and J. Cirac, Projected
+Entangled Pair States with non-Abelian gauge symme-
+tries: An SU(2) study, Annals of Physics 374, 84 (2016).
+[33] E. Zohar and J. Cirac, Combining tensor networks with
+Monte Carlo methods for lattice gauge theories, Physical
+Review D 97, 10.1103/PhysRevD.97.034510 (2018).
+[34] F. Tschirsich, S. Montangero, and M. Dalmonte, Phase
+diagram and conformal string excitations of square ice
+using gauge invariant matrix product states, SciPost
+Physics 6, 10.21468/SciPostPhys.6.3.028 (2019).
+[35] T. Felser, P. Silvi, M. Collura, and S. Montangero,
+Two-dimensional quantum-link lattice quantum electro-
+dynamics at ﬁnite density, arXiv:1911.09693 [quant-ph]
+(2019).
+[36] D. Robaina, M. Banuls, and J. Cirac, Simulating 2+1d z3
+lattice gauge theory with ipeps, arXiv:2007.11630 [hep-
+lat] (2020).
+[37] P. Emonts, M. C. Ba˜ nuls, I. Cirac, and E. Zohar, Vari-
+ational monte carlo simulation with tensor networks of
+a pure Ϝ3 gauge theory in (2 + 1)D, Phys. Rev. D 102,
+074501 (2020).
+[38] G. Magniﬁco, T. Felser, P. Silvi, and S. Montangero, Lat-
+tice quantum electrodynamics in (3+1)-dimensions at ﬁ-
+nite density with tensor networks, arXiv:2011.10658 [hep-
+lat] (2020).
+[39] J. Haegeman, K. Van Acoleyen, N. Schuch, J. I. Cirac,
+and F. Verstraete, Gauging Quantum States: From
+Global to Local Symmetries in Many-Body Systems,
+Phys. Rev. X 5, 011024 (2015).
+[40] E. Zohar and M. Burrello, Building projected entangled
+pair states with a local gauge symmetry, New Journal of
+Physics 18, 043008 (2016).
+[41] Y. Meurice, R. Sakai, and J. Unmuth-Yockey, Tensor
+ﬁeld theory with applications to quantum computing,
+arXiv:2010.06539 [hep-lat] (2020).
+[42] P. Emonts and E. Zohar, Gauss Law, Minimal Coupling
+and Fermionic PEPS for Lattice Gauge Theories, SciPost
+Phys. Lect. Notes , 12 (2020).
+[43] M. Fannes, B. Nachtergaele, and R. F. Werner, Finitely
+correlated states on quantum spin chains, Comm. Math.
+Phys. 144, 443 (1992).
+[44] S. Yang, T. B. Wahl, H.-H. Tu, N. Schuch, and J. I. Cirac,
+Chiral Projected Entangled-Pair State with Topological
+Order, Phys. Rev. Lett. 114, 106803 (2015).
+[45] E. Fradkin and L. Susskind, Order and disorder in gauge
+systems and magnets, Phys. Rev. D 17, 2637 (1978).
+[46] A. Schotte, J. Carrasco, B. Vanhecke, L. Vanderstraeten,
+J. Haegeman, F. Verstraete, and J. Vidal, Tensor-
+network approach to phase transitions in string-net mod-
+els, Phys. Rev. B 100, 245125 (2019).
+[47] A. Ritz-Zwilling, J.-N. Fuchs, and J. Vidal, Wegner-
+wilson loops in string-nets, arXiv:2011.12609 [cond-
+mat.str-el] (2020).
+[48] J. Kogut and L. Susskind, Hamiltonian formulation of
+Wilson’s lattice gauge theories, Physical Review D 11,
+395 (1975).
+[49] E. Zohar and M. Burrello, Formulation of lattice gauge
+theories for quantum simulations, Physical Review D 91,
+10.1103/PhysRevD.91.054506 (2015).
+[50] E. Zohar, J. Cirac, and B. Reznik, Quantum simulations
+of lattice gauge theories using ultracold atoms in opti-
+cal lattices, Reports on Progress in Physics 79, 014401
+(2016).
+[51] R. Brower, S. Chandrasekharan, and U.-J. Wiese, QCD
+as a quantum link model, Physical Review D 60,
+10.1103/PhysRevD.60.094502 (1999).
+[52] V. Kasper, G. Juzeli¯ unas, M. Lewenstein, F. Jendrzejew-
+ski, and E. Zohar, From the jaynes–cummings model to
+non-abelian gauge theories: a guided tour for the quan-
+tum engineer, New Journal of Physics 22, 103027 (2020).
+
+34
+[53] L. Landau and E. Lifshitz, Quantum Mechanics: Non-
+Relativistic Theory, Course of Theoretical Physics (Else-
+vier Science, 1981).
+[54] S. Weinberg, Lectures on Quantum Mechanics , 2nd ed.
+(Cambridge University Press, 2015).
+[55] M. E. Rose, Elementary Theory of Angular Momentum ,
+Dover Books on Physics and Chemistry (Dover, 1995).
+[56] E. Zohar, Quantum simulation of lattice gauge theories
+in more than one space dimension – requirements, chal-
+lenges, methods, arXiv:2106.04609 [quant-ph] (2021).
+[57] J. Kogut, An introduction to lattice gauge theory and
+spin systems, Reviews of Modern Physics 51, 659 (1979).
+[58] A. M. Polyakov, Gauge Fields and Strings , Contempo-
+rary Concepts in Physics (Taylor & Francis, 1987).
+[59] M. Creutz, Asymptotic-freedom scales, Phys. Rev. Lett.
+45, 313 (1980).
+[60] F. Verstraete, M. M. Wolf, D. Perez-Garcia, and J. I.
+Cirac, Criticality, the area law, and the computational
+power of projected entangled pair states, Phys. Rev. Lett.
+96, 220601 (2006).

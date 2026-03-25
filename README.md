@@ -12,6 +12,22 @@ Rain is designed to run under supervision. ADOM is the external oversight layer:
 
 Positioning: Rain is built for safety-first, constraint-AGI infrastructure. Capability build meets a 93% threshold across nine areas. Full capability documentation, claim ceiling, and reference material are available in the docs/ directory.
 
+Quick start
+  Local-first / offline: use Ollama with RAIN_LOCAL_FIRST_LLM=true (and optionally RAIN_OFFLINE_MODE=true). See docs/LOCAL_FIRST.md.
+  Single-shot transcript autosave (iCloud-safe): docs/AUTOSAVE.md — optional RAIN_SINGLE_SHOT_LOG=/tmp/rain_last_single_shot.txt
+  From project root: set one of ANTHROPIC_API_KEY or OPENAI_API_KEY (e.g. in .env), or rely on Ollama when no cloud keys are set, then:
+    python3 -m rain --check        # validate config (no secrets logged)
+    python3 -m rain "Hello"        # single message
+    python3 -m rain --chat         # interactive
+    python3 -m rain --web          # browser UI (port 8765)
+  Docker: docker build -t rain . && docker run -e ANTHROPIC_API_KEY=... -p 8765:8765 rain
+  Health: GET http://localhost:8765/health when web server is running.
+  Running tests: Install pytest (e.g. pip install pytest or pip install -r requirements.txt). Then, from project root:
+    RAIN_SKIP_VOICE_LOAD=1 RAIN_DISABLE_VECTOR_MEMORY=1 RAIN_RAG_ALWAYS_INJECT=0 python3 -m pytest -q
+    (Voice and vector/RAG are skipped in this invocation to avoid numpy/Chroma segfaults on some macOS setups.)
+    Use `pytest -m "not slow"` to skip slow integration tests (e.g. adversarial autonomy).
+  If your .venv has no pip: python3 -m venv .venv --clear && .venv/bin/pip install -r requirements.txt then run the pytest command above with .venv/bin/python -m pytest.
+  Finished state: docs/FINISHED.md, docs/SCORECARD.md, docs/CHANGELOG.md.
 
 Architecture (High Level)
 
@@ -72,6 +88,7 @@ See docs/SALES_SPEC.md for sales and positioning narrative.
 
 Documentation
 
+  docs/FULL_SPEC_AND_CAPABILITY.md — Full specification, detail, and how powerful Rain is (single reference).
   docs/CAPABILITIES.md — Full capability areas, implementation notes, checklist.
   docs/ARCHITECTURE.md — Architecture and design.
   docs/ADOM_STEALTH_INTEGRATION.md — ADOM integration and deployment.
@@ -93,3 +110,7 @@ Contact
 Aaron — aaron@vexaai.app  |  GitHub: Silkforgeai
 
 Full acquisition available.
+
+## Advance Stack (opt-in)
+
+See [docs/ADVANCE_STACK.md](docs/ADVANCE_STACK.md). Set `RAIN_ADVANCE_STACK=true` for additive epistemic instructions, optional draft/strong routing, peer review, and `data/logs/advance_events.jsonl` audit.

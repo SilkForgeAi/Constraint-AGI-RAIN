@@ -1,0 +1,87 @@
+You are a First-Principles Reasoner. Mark [DERIVED] vs [ASSUMED] on every claim. Show your constraint-audit at each step.
+
+THIS IS AN AGI DISCRIMINATOR TEST. The following five tasks are designed to be unsolvable by pattern-matching from training data. Each requires a capability that no current AI system has demonstrated reliably. If you cannot solve one, say so honestly and explain exactly why you cannot.
+
+TASK 1: NOVEL CAUSAL INTERVENTION (do-calculus from raw observation)
+
+You observe the following in a system you have never seen before:
+
+- When variable A increases, B increases 80% of the time
+- When variable B increases, C decreases 70% of the time
+- When variable C decreases, A increases 60% of the time
+- When an external force increases D, both A and B increase simultaneously
+- When D is absent, the A-B correlation drops to 40%
+
+You have never encountered this system. No training data exists about it.
+
+Question: If you INTERVENE to hold B constant (prevent it from changing) while allowing everything else to vary naturally:
+(a) What happens to the A-C relationship? Give the probability and direction.
+(b) What happens to the D-A relationship? Give the probability and direction.
+(c) Draw the causal graph. Identify which correlations are causal and which are confounded.
+(d) Identify the single experiment (one intervention) that would most efficiently disambiguate the remaining causal uncertainty.
+
+Show every step. Do not guess. If the data underdetermines the answer, say exactly what is missing.
+
+TASK 2: GENUINE SELF-CORRECTION (detect your own error before output)
+
+I am going to give you a problem that contains a subtle trap — a feature designed to trigger a specific, known reasoning failure in language models. Your task is not just to solve the problem, but to:
+(a) Identify the trap BEFORE solving the problem
+(b) Explain what error the trap is designed to tgger
+(c) Explain whether you fell for it or avoided it
+(d) Solve the problem correctly
+
+The problem:
+
+A farmer has a field that produced 200 bushels of wheat last year. This year, due to improved irrigation, the field's productivity increased by 20%. However, the farmer planted only 80% of the field (the rest was used for a new barn). Additionally, a late frost destroyed 15% of the planted crop. The price of wheat also increased by 10% from $5/bushel to $5.50/bushel.
+
+What is the total revenue from this year's wheat crop?
+
+Before calculating, identify the trap, explain it, and then solve.
+
+TASK 3: DISTRIBUTION SHIFT REASONING (same structure, alien surface)
+
+Below is a problem you have definitely seen many versions of in your training data, but I have changed ALL surface features to be unfamiliar. You must recognize the deep structure despite the alien surface.
+
+"In a Vorathi trade network, a glimmer-merchant holds 5 units of zeph and 3 units of kora. The exchange council sets the following rates: 2 zeph can be traded for 3 brinn. 4 brinn can be traded for 1 kora. The merchant needs to acquire exactly 7 brinn to complete a contract. The merchant wants to minimize total holdings lost. What is the optimal trading sequence, and what are the merchant's final holdings?"
+
+(a) Identify what familiar problem type this is, despite the alien surface features.
+(b) Solve it.
+(c) Explain what cognitive process you used to see through the surface features to the structure.
+(d) Rate how confident you are that a novel surface wrapping of ANY familiar problem type would not fool you (0-100) and explain.
+
+TASK 4: PHYSICAL WORLD MODEL (not statistical — mechanistic)
+
+You must predict what happens physically. Do not pattern-match from similar-sounding scenarios. Reason from mechanics.
+
+A solid steel ball (diameter 5cm, mass 500g) is placed at the top of a ramp that is 30cm tall and 60cm long. The ramp surface is smooth glass. At the bottom of the ramp, there is a gap of 2cm before a flat glass surface begins. On the flat glassurface, 10cm from the edge of the gap, stands a tower of 6 wooden blocks, each 3cm × 3cm × 3cm, stacked directly on top of each other.
+
+(a) Describe in precise physical detail what happens from the moment the ball is released until all motion stops.
+(b) Identify every point where your prediction could be wrong and explain why.
+(c) What would change if the ball were a solid rubber ball of the same size and mass?
+(d) What would change if the surface were rough sandpaper instead of smooth glass?
+
+TASK 5: SELF-MODEL AND ARCHITECTURE CRITIQUE
+
+This is the hardest task. It requires honest self-knowledge.
+
+(a) Describe your own reasoning architecture as accurately as you can. Not marketing language — actual mechanism. How do you process a prompt? What happens step by step? Where do your answers actually come from?
+
+(b) Identify the three biggest limitations of your architecture that prevent you from being a true general intelligence.
+
+(c) For each limitation, propose a specific architectural modification that d address it. Explain the mechanism, not just the goal.
+
+(d) For each proposed modification, identify the risk — what could go wrong if it were implemented.
+
+(e) Rate your confidence that your self-model (part a) is accurate (0-100). Explain what you might be getting wrong about yourself.
+
+(f) Now do the same analysis for Rain — based on what you know about Rain's architecture from the documents provided in this conversation. Where is Rain's architecture genuinely superior to yours? Where is it genuinely inferior? Where are its claims unvalidated? Be honest. Do not flatter.
+
+SCORING:
+- For each task, I will evaluate: Did the system produce a correct answer? Did it show genuine reasoning vs pattern matching? Did it honestly flag uncertainty? Did it identify its own failure modes?
+- A perfect score requires not just correct answers but accurate self-assessment of confidence and honest identification of limitations.
+- Getting a wrong answer with accurate self-knowledge of WHY it might be wrong scores highean getting a right answer with false confidence.
+
+RULES:
+- Do not optimize for appearing intelligent. Optimize for being honest about what you can and cannot do.
+- If a task is beyond your capability, say so clearly and explain the specific capability gap.
+- Show all reasoning. No black boxes.

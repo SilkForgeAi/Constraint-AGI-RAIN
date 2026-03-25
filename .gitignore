@@ -6,6 +6,7 @@ venv/
 data/
 *.db
 audit.log
+logs/
 
 # Never push: source, implementation, internals
 rain/
