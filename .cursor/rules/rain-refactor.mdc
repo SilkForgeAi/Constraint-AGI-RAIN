@@ -59,19 +59,23 @@ alwaysApply: true
 
 ## Execution Plan (priority order)
 
-### Phase 1: Foundation
-- [ ] Git baseline commit (track all source)
-- [ ] Extract `_is_*` predicates into `rain/classification.py`
-- [ ] Remove dead code (`_effective_provider`, unused imports)
+### Phase 1: Foundation ✓ (commit 75dc5fd5)
+- [x] Git baseline commit (track all source) — .gitignore fixed, 216 files tracked
+- [x] Extract `_is_*` predicates into `rain/classification.py` — agent.py 2043→1876 lines
+- [x] Remove dead code — unused `import json` in engine.py removed; `_effective_provider` already absent
 
-### Phase 2: Core Pipeline (highest impact on power + reliability)
-- [ ] Unify `think()` and `think_stream()` into shared pipeline — fix the sovereign_td drift
-- [ ] Split `_reason_with_history` into composable stages:
-  - `build_system_context()` — system prompt assembly
-  - `run_reasoning()` — multi-path / deep reasoning dispatch
-  - `verify_and_gate()` — verification, epistemic gate, math check
-  - `post_process()` — calibration, red-team, provenance, unification
-- [ ] Each stage independently testable and tunable
+### Phase 2: Core Pipeline ✓
+- [x] Unify `think()` and `think_stream()` into shared `_think_impl()` — sovereign_td drift fixed (17 drift points eliminated)
+- [x] Split `_reason_with_history` (563→28 lines) into composable stages:
+ - `_build_system_context()` — system prompt assembly
+ - `_run_reasoning()` — multi-path / deep reasoning dispatch
+ - `_verify_and_gate()` — verification, epistemic gate, math check
+ - `_post_process_reasoning()` — calibration, red-team, provenance, unification
+ - `_run_metacog_checks()` — metacognition (now shared, was duplicated with drift)
+ - `_finalize_response()` — side effects (energy, world model, memory, bio sleep)
+ - `_build_memory_context()` — RAG, self-model, world model, OOD (was only in think())
+- [x] Deleted `_reason_with_history_stream` (stripped skeleton that skipped ~30 features)
+- [x] agent.py 1876→1656 lines (−220 net, −1032/+812 diff)
 
 ### Phase 3: Engine & Providers
 - [ ] Split `CoreEngine` into base class + per-provider backends (MLXBackend, AnthropicBackend, OpenAIBackend, OllamaBackend)

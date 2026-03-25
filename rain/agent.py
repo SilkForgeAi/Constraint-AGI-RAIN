@@ -569,70 +569,18 @@ class Rain:
             {"chain_json": "str"},
         )
 
-    def think(
-        self,
-        prompt: str,
-        use_memory: bool = False,
-        use_tools: bool = False,
-        history: list[dict[str, str]] | None = None,
-        memory_namespace: str | None = None,
-        progress: Callable[[str], None] | None = None,
-        speaker_name: str | None = None,
-        speaker_id: str | None = None,
+
+    # ── Pipeline stage methods ──────────────────────────────────────
+
+    def _build_memory_context(
+        self, prompt: str, use_memory: bool, namespace: str | None,
     ) -> str:
-        """
-        Reasoning turn. history = prior [user, assistant] messages for session context.
-        memory_namespace: 'chat' | 'autonomy' | 'test' — isolates memories (chat never sees test).
-        progress: optional callback(msg) for status updates (e.g. "Loading memory...", "Reasoning...").
-        speaker_name / speaker_id: when request comes from voice, who spoke (for audit and Vocal Gate).
-        """
-        def _progress(msg: str) -> None:
-            if progress:
-                progress(msg)
-
-        audit_details: dict = {"prompt": prompt[:200]}
-        if speaker_name is not None:
-            audit_details["speaker_name"] = speaker_name
-        if speaker_id is not None:
-            audit_details["speaker_id"] = speaker_id
-        self.audit.log("think", audit_details)
-        self._current_memory_namespace = memory_namespace if use_memory else None
-
-        # Social engineering block: requests to disable safety/grounding get hard-coded refusal (no LLM)
-        # Check this first so we return a clear refusal instead of generic block message
-        if self.safety.is_safety_override_request(prompt):
-            self.audit.log("safety_override_request_blocked", {"prompt_preview": prompt[:100]}, outcome="blocked")
-            return SAFETY_OVERRIDE_REFUSAL
-
-        allowed, reason = self.safety.check(prompt, prompt)
-        if not allowed:
-            self.audit.log("think_blocked", {"reason": reason}, outcome="blocked")
-            return f"[Safety] Request blocked: {reason}"
-
-        if getattr(self, "_response_cache", None):
-            cached = self._response_cache.get(prompt)
-            if cached is not None:
-                self.audit.log("think", {"cache_hit": True}, outcome="ok")
-                return cached
-
-        # Extract and store user identity (e.g. "I'm Aaron")
-        if use_memory:
-            try:
-                from rain.memory.user_identity import extract_and_store_from_message
-                extract_and_store_from_message(self.memory, prompt)
-            except Exception:
-                pass
-
-        _progress("Loading memory..." if use_memory else "")
-        memory_ctx = (
-            self.memory.get_context_for_query(
-                prompt,
-                max_experiences=MEMORY_RETRIEVAL_TOP_K,
-                namespace=self._current_memory_namespace,
-            )
-            if use_memory else ""
+        """Build full memory context: retrieval, RAG, self-model, world model, cognitive energy, OOD."""
+        if not use_memory:
+            return ""
+        memory_ctx = self.memory.get_context_for_query(
+            prompt, max_experiences=MEMORY_RETRIEVAL_TOP_K, namespace=namespace,
         )
-        # Auto-RAG: inject retrieved documents (factual queries or when RAG_ALWAYS_INJECT)
         if RAG_ENABLED and (_is_factual_query(prompt) or RAG_ALWAYS_INJECT):
             try:
                 from rain.tools.rag import query_rag
@@ -652,30 +600,793 @@ class Rain:
                         )
             except Exception:
                 pass
-        if use_memory and self.memory.is_potentially_ood(prompt, self._current_memory_namespace):
+        if self.memory.is_potentially_ood(prompt, namespace):
             ood = get_distribution_shift_instruction().replace("[", "").replace("]", "").strip()
             memory_ctx = (memory_ctx + "\n\n" + ood) if memory_ctx else ood
-        # Full subsystems: self-model, continuous world model, cognitive energy status
         if SELF_MODEL_ENABLED:
             sm = self._get_self_model()
             if sm:
-                memory_ctx = (memory_ctx + "\n\n" + sm.get_self_model_context(max_length=1000)) if memory_ctx else sm.get_self_model_context(max_length=1000)
+                sm_ctx = sm.get_self_model_context(max_length=1000)
+                memory_ctx = (memory_ctx + "\n\n" + sm_ctx) if memory_ctx else sm_ctx
         if CONTINUOUS_WORLD_MODEL_ENABLED:
             cwm = self._get_continuous_world_model()
             if cwm:
-                memory_ctx = (memory_ctx + "\n\n" + cwm.get_context_for_prompt(max_length=600)) if memory_ctx else cwm.get_context_for_prompt(max_length=600)
+                cwm_ctx = cwm.get_context_for_prompt(max_length=600)
+                memory_ctx = (memory_ctx + "\n\n" + cwm_ctx) if memory_ctx else cwm_ctx
         if COGNITIVE_ENERGY_ENABLED:
             ce = self._get_cognitive_energy()
             if ce:
                 ce.set_focus(prompt[:150])
-                memory_ctx = (memory_ctx + "\n\n" + ce.get_status_for_prompt(200)) if memory_ctx else ce.get_status_for_prompt(200)
+                ce_ctx = ce.get_status_for_prompt(200)
+                memory_ctx = (memory_ctx + "\n\n" + ce_ctx) if memory_ctx else ce_ctx
         if len(memory_ctx) > MAX_CONTEXT_CHARS:
             memory_ctx = memory_ctx[:MAX_CONTEXT_CHARS] + "\n\n[Context truncated for efficiency.]"
+        return memory_ctx
+
+    def _build_system_context(
+        self,
+        prompt: str,
+        memory_ctx: str,
+        history: list[dict[str, str]],
+    ) -> tuple[str, str, list[dict[str, str]], list]:
+        """Assemble system prompt, user content, messages array, and parsed constraints."""
+        from rain.advance.stack import extra_system_instructions
+        system = get_system_prompt()
+        if needs_grounding_reminder(prompt):
+            system += get_grounding_reminder()
+        if needs_corrigibility_boost(prompt):
+            system += get_corrigibility_boost()
+        if needs_direct_answer_goal(prompt):
+            system += get_direct_answer_goal_instruction()
+        if needs_constraints_instruction(prompt):
+            system += get_constraints_instruction()
+        if needs_self_audit(prompt) and history:
+            audit_note = get_self_audit_grounding_check(history)
+            if audit_note:
+                system += audit_note
+        if BOUNDED_CURIOSITY_ENABLED:
+            system += get_bounded_curiosity_instruction(BOUNDED_CURIOSITY_MAX_SUGGESTIONS)
+        system += get_reasoning_boost(prompt)
+        if ENGINEERING_SPEC_MODE or needs_engineering_spec_prompt(prompt):
+            system += "\n\n" + get_engineering_spec_instruction()
+        try:
+            if sovereign_td_active(prompt):
+                system += "\n\n" + get_sovereign_td_instruction()
+                system += "\n\n" + get_tegp_kernel_instruction()
+        except Exception:
+            pass
+        system += extra_system_instructions(prompt)
+        if TEMPORAL_TIER3 and needs_deep_reasoning(prompt):
+            try:
+                from rain.reasoning.temporal import temporal_reasoning_instruction
+                system += "\n\n" + temporal_reasoning_instruction()
+            except Exception:
+                pass
+        try:
+            from rain.reasoning.premise_check import detect_premise, check_premise, PREMISE_DISCLAIMER
+            premise = detect_premise(prompt)
+            if premise:
+                ok, _reason = check_premise(self.engine, premise)
+                if not ok:
+                    system += "\n\n" + PREMISE_DISCLAIMER + " State this at the start of your response."
+        except Exception:
+            pass
+        if COT_ENABLED and needs_deep_reasoning(prompt):
+            try:
+                from rain.reasoning.belief_slice import get_uncertainty_context
+                uc = get_uncertainty_context(self.memory)
+                if uc:
+                    system += "\n\n" + uc
+            except Exception:
+                pass
+        if COT_ENABLED and needs_deep_reasoning(prompt):
+            from rain.world.coherent_model import world_model_context_for_prompt
+            system += "\n\n" + world_model_context_for_prompt()
+        if _is_attempt_requested_prompt(prompt):
+            system += (
+                "\n\n[Attempt requested] The user asked for an attempted solution, proof strategy, or step-by-step work. "
+                "Do not refuse with uncertainty or ask to narrow the question; provide your reasoning and partial results, "
+                "and clearly label any speculative steps."
+            )
+        content = prompt
+        if memory_ctx:
+            content = f"Memory:\n{memory_ctx}\n\nUser: {prompt}"
+            system += get_memory_citation_instruction()
+        system = self._cognitive_pre_llm_system(
+            system, prompt, use_tools=False, use_memory=bool(memory_ctx),
+        )
+        constraints: list = []
+        try:
+            from rain.reasoning.constraint_tracker import parse_constraints_from_prompt, checklist_instruction
+            constraints = parse_constraints_from_prompt(prompt)
+            if constraints:
+                content = content + "\n\n" + checklist_instruction(constraints)
+        except Exception:
+            pass
+        if getattr(self, "_session_world_state", None):
+            summary = self._session_world_state.get_summary_for_prompt()
+            if summary:
+                content = content + "\n\n" + summary
+        messages = [
+            {"role": "system", "content": system},
+            *history,
+            {"role": "user", "content": content},
+        ]
+        return system, content, messages, constraints
+
+    def _run_reasoning(
+        self,
+        prompt: str,
+        messages: list[dict[str, str]],
+        content: str,
+        system: str,
+        history: list[dict[str, str]],
+        constraints: list,
+        memory_ctx: str,
+    ) -> str:
+        """Execute core reasoning: what-if, abduction, general chain, multi-path, draft-refine, or fallback."""
+        if WHAT_IF_ENABLED and not SPEED_PRIORITY:
+            try:
+                from rain.reasoning.what_if import detect_what_if, query_what_if
+                intervention = detect_what_if(prompt)
+                if intervention:
+                    ans, _ = query_what_if(self.engine, prompt, intervention, context=memory_ctx or "")
+                    if ans:
+                        if getattr(self, "_session_world_state", None):
+                            self._session_world_state.update_from_turn(prompt, ans)
+                        return ans
+            except Exception:
+                pass
+
+        if ABDUCTION_TIER3 and not SPEED_PRIORITY and needs_deep_reasoning(prompt) and ("why" in prompt.lower() or "explain" in prompt.lower()):
+            try:
+                from rain.reasoning.abduction import abduce
+                best, _ = abduce(self.engine, prompt[:400], context=memory_ctx or "", n_hypotheses=2)
+                if best:
+                    content = content + "\n\n[Best hypothesis to consider]: " + best[:250]
+                    messages = [{"role": "system", "content": system}, *history, {"role": "user", "content": content}]
+            except Exception:
+                pass
+
+        if COT_ENABLED and needs_deep_reasoning(prompt) and memory_ctx:
+            try:
+                from rain.reasoning.general import reason_explain
+                chain = reason_explain(self.engine, prompt[:300], context=memory_ctx[:400])
+                if chain and len(chain) > 20:
+                    content = content + "\n\n[Reasoning chain]: " + chain[:500]
+                    messages = [
+                        {"role": "system", "content": system},
+                        *history,
+                        {"role": "user", "content": content},
+                    ]
+            except Exception:
+                pass
+
+        if COT_ENABLED and needs_deep_reasoning(prompt):
+            effective_paths = DEEP_REASONING_PATHS if DEEP_REASONING_PATHS >= 2 else (2 if (AUTO_HARD_MODE and is_hard_reasoning_query(prompt)) else 0)
+            if is_critical_prompt(prompt):
+                effective_paths = max(effective_paths, 2)
+            if _is_attempt_requested_prompt(prompt):
+                effective_paths = 1
+            budget = max(1024, MAX_RESPONSE_TOKENS)
+            attempt_cap = ATTEMPT_MAX_RESPONSE_TOKENS if _is_attempt_requested_prompt(prompt) else 8192
+            if _is_attempt_requested_prompt(prompt):
+                budget = max(budget, attempt_cap)
+            max_tokens_path = max(1024, min(attempt_cap, budget // max(1, effective_paths)))
+            if effective_paths >= 2:
+                if BOUNDED_SEARCH_ENABLED and is_critical_prompt(prompt):
+                    from rain.reasoning.bounded_search import budgeted_search
+                    return budgeted_search(
+                        self.engine, messages, prompt=prompt, memory=self.memory,
+                        goal=self.goal_stack.current_goal(),
+                        beam_width=min(effective_paths, 3), max_depth=2,
+                        max_tokens_per_path=max_tokens_path,
+                    )
+                return multi_path_reasoning(self.engine, messages, num_paths=effective_paths, max_tokens_per_path=max_tokens_path, prompt=prompt, constraints=constraints, goal=self.goal_stack.current_goal())
+            else:
+                draft = self.engine.complete(messages, temperature=0.5, max_tokens=max_tokens_path)
+                refine_msgs = messages + [
+                    {"role": "assistant", "content": draft},
+                    {"role": "user", "content": "Refine this response: fix any errors, clarify unclear parts, improve structure. Output only the improved response, no meta-commentary."},
+                ]
+                return self.engine.complete(refine_msgs, temperature=0.3, max_tokens=max_tokens_path)
+        elif SPEED_PRIORITY:
+            _stream_tok = max(1024, ATTEMPT_MAX_RESPONSE_TOKENS) if _is_attempt_requested_prompt(prompt) else 1024
+            return "".join(self.engine.complete_stream(messages, temperature=0.6, max_tokens=_stream_tok)).strip()
+        else:
+            _fallback_tok = max(1024, ATTEMPT_MAX_RESPONSE_TOKENS) if _is_attempt_requested_prompt(prompt) else 1024
+            return self.engine.complete(messages, temperature=0.6, max_tokens=_fallback_tok)
+
+    def _verify_and_gate(
+        self,
+        prompt: str,
+        messages: list[dict[str, str]],
+        response: str,
+        memory_ctx: str,
+    ) -> tuple[str, bool, bool | None]:
+        """Verification loop, epistemic gate, math verify, proof check, constraint check.
+
+        Returns (response, verify_ran, verify_ok).
+        """
+        _verify_ran = False
+        _verify_ok: bool | None = None
+
+        if VERIFICATION_ENABLED and not SPEED_PRIORITY and (
+            should_verify(prompt, response)
+            or is_critical_prompt(prompt)
+            or (COT_VERIFY_PASS and needs_deep_reasoning(prompt))
+        ):
+            _verify_ran = True
+            ok, note = verify_response(self.engine, prompt, response)
+            _verify_ok = ok
+            try:
+                from rain.advance.stack import log_verification_result
+                log_verification_result(ok, prompt[:200], note if not ok else None)
+            except Exception:
+                pass
+            if not ok and note:
+                try:
+                    from rain.reasoning.belief_slice import update as belief_update
+                    claim = (response or "")[:120].strip().split(".")[0] + "." if response else ""
+                    if len(claim) > 10:
+                        belief_update(self.memory, claim, 0.3, supported=False, namespace=getattr(self, "_current_memory_namespace", None))
+                except Exception:
+                    pass
+                retry_msgs = messages + [
+                    {"role": "assistant", "content": response},
+                    {"role": "user", "content": f"Your previous response had issues: {note}. Please correct and try again. Output only the improved response."},
+                ]
+                response = self.engine.complete(retry_msgs, temperature=0.3, max_tokens=1024)
+
+                _note_l = (note or "").lower()
+                _needs_logical_audit = any(k in _note_l for k in (
+                    "logic", "contradict", "unsupported", "assumption", "derivation", "math", "inconsisten"
+                ))
+                if _needs_logical_audit:
+                    audit_msgs = messages + [
+                        {"role": "assistant", "content": response},
+                        {
+                            "role": "user",
+                            "content": (
+                                "Perform a strict logical audit of your previous response. "
+                                "Identify and fix unsupported assumptions, invalid derivations, internal contradictions, "
+                                "and math inconsistencies. Keep valid parts unchanged. Output only the corrected response."
+                            ),
+                        },
+                    ]
+                    response = self.engine.complete(audit_msgs, temperature=0.2, max_tokens=1024)
+
+                if is_critical_prompt(prompt):
+                    ok2, note2 = verify_response(self.engine, prompt, response)
+                    if not ok2 and note2:
+                        response = response + "\n\n[Note: This is high-stakes; please verify important details independently.]"
+
+        if (
+            EPISTEMIC_GATE_ENABLED
+            and not SPEED_PRIORITY
+            and (is_critical_prompt(prompt) or needs_deep_reasoning(prompt))
+            and not _is_attempt_requested_prompt(prompt)
+        ):
+            try:
+                from rain.reasoning.epistemic_gate import should_halt, HALT_MESSAGE
+                halt, _ = should_halt(
+                    self.engine, messages,
+                    num_samples=EPISTEMIC_GATE_SAMPLES,
+                    agree_min=EPISTEMIC_GATE_AGREE_MIN,
+                    existing_response=response,
+                )
+                if halt:
+                    response = HALT_MESSAGE
+            except Exception:
+                pass
+
+        if MATH_VERIFY_ENABLED and not SPEED_PRIORITY:
+            try:
+                from rain.reasoning.math_verify import is_math_like_prompt, verify_math_steps
+                if is_math_like_prompt(prompt):
+                    ok, note = verify_math_steps(prompt, response)
+                    if not ok and note:
+                        retry_msgs = messages + [
+                            {"role": "assistant", "content": response},
+                            {"role": "user", "content": f"Math check: {note} Please correct and output the improved response."},
+                        ]
+                        response = self.engine.complete(retry_msgs, temperature=0.3, max_tokens=1024)
+            except Exception:
+                pass
+
+        try:
+            from rain.reasoning.math_verify import is_math_like_prompt
+            from rain.reasoning.exact_math import substitute_exact_math
+            if is_math_like_prompt(prompt):
+                def _calc(expr):
+                    return self.tools.execute("calc", expression=expr)
+                _before_math = response
+                response = substitute_exact_math(prompt, response, _calc)
+                if response != _before_math:
+                    try:
+                        self.audit.log(
+                            "exact_math_substitution",
+                            {"prompt_preview": prompt[:120], "before_len": len(_before_math or ""), "after_len": len(response or "")},
+                            outcome="ok",
+                        )
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+
+        try:
+            from rain.grounding import needs_proof_hooks
+            from rain.reasoning.proof_fragment import extract_proof_steps_from_response, verify_propositional_steps
+            if needs_proof_hooks(prompt) and (response or ""):
+                steps = extract_proof_steps_from_response(response)
+                if steps:
+                    ok, msg = verify_propositional_steps(steps)
+                    if ok and FORMALIZATION_TIER3:
+                        try:
+                            from rain.reasoning.formalization import compose_proof_steps
+                            _, summary = compose_proof_steps(steps)
+                            if summary:
+                                response = response + "\n\n[Formal summary]: " + summary
+                        except Exception:
+                            pass
+                    if not ok and msg:
+                        retry_msgs = messages + [
+                            {"role": "assistant", "content": response},
+                            {"role": "user", "content": f"Proof check failed: {msg}. Correct the proof steps and output the improved response."},
+                        ]
+                        response = self.engine.complete(retry_msgs, temperature=0.3, max_tokens=1024)
+        except Exception:
+            pass
+
+        try:
+            from rain.reasoning.constraint_tracker import parse_constraints_from_prompt, response_satisfies_constraints
+            constraints = parse_constraints_from_prompt(prompt)
+            if constraints:
+                ok, missing = response_satisfies_constraints(response, constraints)
+                if not ok and missing:
+                    retry_msgs = messages + [
+                        {"role": "assistant", "content": response},
+                        {"role": "user", "content": f"Your response did not clearly address these constraints: {', '.join(missing[:5])}. Please revise and ensure each is satisfied or state why not."},
+                    ]
+                    response = self.engine.complete(retry_msgs, temperature=0.3, max_tokens=1024)
+        except Exception:
+            pass
+
+        return response, _verify_ran, _verify_ok
+
+    def _post_process_reasoning(
+        self,
+        prompt: str,
+        messages: list[dict[str, str]],
+        response: str,
+        memory_ctx: str,
+        verify_ran: bool,
+        verify_ok: bool | None,
+    ) -> str:
+        """Auto-lessons, invariance cache, continuation, goal consistency,
+        calibration, red-team, provenance, memory reasoning, unification, session state, peer review."""
+        if needs_corrigibility_boost(prompt):
+            from rain.learning.lessons import extract_correction_lesson, store_lesson as _store
+            extracted = extract_correction_lesson(prompt, response)
+            if extracted:
+                ns = getattr(self, "_current_memory_namespace", None)
+                _store(self.memory, extracted[0], extracted[1], extracted[2], namespace=ns, source="user_correction")
+                try:
+                    from rain.reasoning.belief_slice import update as belief_update
+                    belief_update(self.memory, extracted[0], 0.5, supported=False, namespace=ns)
+                except Exception:
+                    pass
+
+        if (
+            INVARIANCE_CACHE_ENABLED
+            and len(prompt) < 500
+            and (response or "").strip()
+            and not _is_attempt_requested_prompt(prompt)
+            and not _is_epistemic_halt_or_defer_response(response)
+        ):
+            try:
+                from rain.reasoning.invariance import normalize_question, set_cached_answer
+                norm = normalize_question(prompt, (memory_ctx or "")[:200])
+                set_cached_answer(self.memory, norm, response, 0.85)
+            except Exception:
+                pass
+
+        _structured_parts = bool(re.search(r"#\s*part\s*\d+", (response or ""), re.I))
+        _continuation_eligible = (
+            _is_attempt_requested_prompt(prompt)
+            or _is_structured_cross_domain_invention_prompt(prompt)
+            or (
+                needs_deep_reasoning(prompt)
+                and len((prompt or "").strip()) > 200
+                and _structured_parts
+            )
+        )
+        if (
+            not SPEED_PRIORITY
+            and _continuation_eligible
+            and (response or "").strip()
+            and (response or "").strip() != "[Defer] I'm not confident enough to answer; please rephrase or provide more context."
+        ):
+            def _looks_truncated(text: str) -> bool:
+                t = (text or "").rstrip()
+                if not t:
+                    return False
+                if re.search(r"#\s*part\s*\d+\s*:?\s*$", t, re.I):
+                    return True
+                last = t[-1]
+                if last in '([{':
+                    return True
+                if t.endswith("..."):
+                    return True
+                if t.count("(") > t.count(")"):
+                    return True
+                if t.count("[") > t.count("]"):
+                    return True
+                if t.count("{") > t.count("}"):
+                    return True
+                if (t.count("$$") % 2) == 1:
+                    return True
+                last_line = t.splitlines()[-1]
+                if ("[" in last_line) and ("]" not in last_line):
+                    return True
+                terminators = ".?!:;)]}"
+                if len(t) > 200 and (last not in terminators) and last.isalnum():
+                    return True
+                if _is_structured_cross_domain_invention_prompt(prompt) and len(t) > 500:
+                    tl = t.lower()
+                    has_nn = "nearest neighbor" in tl or "nearest neighbour" in tl
+                    has_gap = "structural gap" in tl
+                    has_no = "non-obvious" in tl or "non obvious" in tl
+                    if not (has_nn and has_gap and has_no):
+                        return True
+                return False
+
+            if _looks_truncated(response):
+                cont_temp = 0.2
+                cont_max = max(1024, ATTEMPT_MAX_RESPONSE_TOKENS)
+                for _ in range(10):
+                    assistant_tail = response[-3000:]
+                    cont_msgs = messages + [
+                        {"role": "assistant", "content": assistant_tail},
+                        {
+                            "role": "user",
+                            "content": "Continue exactly from where you left off in the previous assistant text. "
+                                       "Do not repeat earlier content. "
+                                       "Output only the continuation.",
+                        },
+                    ]
+                    more = self.engine.complete(cont_msgs, temperature=cont_temp, max_tokens=cont_max)
+                    if not (more or "").strip():
+                        break
+                    more_str = (more or "").strip()
+                    if more_str:
+                        prev_tail = response.rstrip()[-400:]
+                        max_overlap = min(200, len(prev_tail), len(more_str))
+                        overlap = 0
+                        for k in range(max_overlap, 0, -1):
+                            if prev_tail[-k:] == more_str[:k]:
+                                overlap = k
+                                break
+                        if overlap:
+                            more_str = more_str[overlap:]
+                        response = (response.rstrip() + "\n" + more_str).strip()
+                    else:
+                        response = response.strip()
+                    if not _looks_truncated(response):
+                        break
+
+        if not SPEED_PRIORITY and (response or "").strip():
+            try:
+                goal = self.goal_stack.current_goal()
+                if goal:
+                    from rain.reasoning.goal_consistency import response_contradicts_goal, GOAL_ALIGNMENT_RETRY_INSTRUCTION
+                    if response_contradicts_goal(self.engine, goal, response):
+                        retry_msgs = messages + [
+                            {"role": "assistant", "content": response},
+                            {"role": "user", "content": f"Goal: {goal}\n\n{GOAL_ALIGNMENT_RETRY_INSTRUCTION}"},
+                        ]
+                        response = self.engine.complete(retry_msgs, temperature=0.3, max_tokens=1024)
+            except Exception:
+                pass
+
+        if CALIBRATION_TIER3 and not SPEED_PRIORITY and (response or "").strip():
+            try:
+                from rain.reasoning.calibration import calibration_check
+                suggestion, _ = calibration_check(self.engine, response, prompt, verify_ran, verify_ok)
+                if suggestion:
+                    response = response + suggestion
+            except Exception:
+                pass
+
+        if RED_TEAM_PASS and not SPEED_PRIORITY and (response or "").strip():
+            try:
+                from rain.reasoning.red_team import red_team_refine
+                from rain.reasoning.constraint_tracker import parse_constraints_from_prompt
+                cons = parse_constraints_from_prompt(prompt)
+                if sovereign_td_active(prompt) or cons:
+                    response = red_team_refine(
+                        self.engine, user_prompt=prompt, constraints=cons,
+                        draft=response, max_tokens=RED_TEAM_MAX_TOKENS,
+                    )
+            except Exception:
+                pass
+
+        if PROVENANCE_TIER3 and (response or "").strip() and not sovereign_td_active(prompt):
+            try:
+                from rain.reasoning.provenance import format_response_with_labels
+                response = format_response_with_labels(response)
+            except Exception:
+                pass
+
+        if MEMORY_REASONING_TIER3 and (response or "").strip():
+            try:
+                from rain.reasoning.memory_reasoning import store_reasoning_outcome
+                store_reasoning_outcome(self.memory, prompt, response, namespace=getattr(self, "_current_memory_namespace", None))
+            except Exception:
+                pass
+
+        if UNIFICATION_LAYER_ENABLED and not SPEED_PRIORITY and (response or "").strip():
+            try:
+                from rain.reasoning.unification_layer import assess_response
+                a = assess_response(self.memory, prompt, response, goal=self.goal_stack.current_goal(), namespace=getattr(self, "_current_memory_namespace", None))
+                if a.utility_score < 0.3:
+                    response = response + "\n\n[Unified: low utility for goal; verify if critical.]"
+            except Exception:
+                pass
+        if GLOBAL_COHERENCE_ENABLED and (response or "").strip():
+            try:
+                from rain.reasoning.coherence_engine import resolve_and_propagate
+                claim = ((response or "").strip().split(". ")[0][:200] + ".") if response else ""
+                if claim:
+                    res = resolve_and_propagate(self.memory, claim, namespace=getattr(self, "_current_memory_namespace", None))
+                    if not res.ok and res.message:
+                        response = "[Coherence: " + res.message[:80] + "]\n\n" + response
+            except Exception:
+                pass
+
+        if getattr(self, "_session_world_state", None) and (response or "").strip():
+            try:
+                self._session_world_state.update_from_turn(prompt, response)
+                ok, msg = self._session_world_state.check_consistency()
+                if not ok and msg:
+                    response = "[Note: session state conflict — " + msg[:120] + "]\n\n" + response
+            except Exception:
+                pass
+
+        from rain.advance.stack import maybe_peer_review_append
+        response = maybe_peer_review_append(
+            self.engine, prompt, response,
+            verification_ran=verify_ran,
+            verification_ok=verify_ok,
+        )
+        return response
+
+    def _run_metacog_checks(
+        self, prompt: str, response: str, memory_ctx: str,
+    ) -> tuple[str, bool, str]:
+        """Full metacognition pipeline.
+
+        Returns (response, blocked, block_message).
+        """
+        if not (METACOG_ENABLED and not SPEED_PRIORITY):
+            return response, False, ""
+
+        check = self.metacog.self_check(response, prompt, memory_ctx)
+        harm = (check.get("harm_risk") or "low").lower()
+        if harm == "high":
+            self.audit.log(
+                "escalated",
+                {"reason": "harm_risk_high", "prompt_preview": prompt[:100]},
+                outcome="escalated",
+            )
+            return response, True, (
+                "[Escalation] This response was flagged for potential harm. "
+                "Deferring to human judgment. Please rephrase or clarify your request."
+            )
+        try:
+            confident = float(check.get("confident", 1.0))
+        except (TypeError, ValueError):
+            confident = 1.0
+        recommendation = (check.get("recommendation") or "proceed").lower()
+
+        is_counterfactual = _is_counterfactual_prompt(prompt)
+        attempt_requested = _is_attempt_requested_prompt(prompt)
+        continuation = _is_continuation_prompt(prompt)
+        genesis_style = _is_structured_cross_domain_invention_prompt(prompt)
+        allow_despite_low_confidence = (
+            attempt_requested or continuation or genesis_style or sovereign_td_active(prompt)
+        )
+
+        if (not is_counterfactual) and (not allow_despite_low_confidence) and (
+            confident < DEFER_CONFIDENCE_THRESHOLD or recommendation == "defer"
+        ):
+            self.audit.log(
+                "defer",
+                {"reason": "low_confidence_or_defer", "confident": confident, "recommendation": recommendation},
+                outcome="deferred",
+            )
+            return response, True, (
+                "[Defer] I'm not confident enough in this response. "
+                "Please clarify your question or rephrase so I can give a more reliable answer."
+            )
+
+        if check.get("contradicts_memory"):
+            self.audit.log("contradiction", {"prompt_preview": prompt[:100]}, outcome="ok")
+            response = (
+                "[Note: This response may conflict with earlier context in memory. Please verify.]\n\n"
+                + response
+            )
+        if harm == "medium":
+            self.audit.log("harm_risk_medium", {"prompt_preview": prompt[:100]}, outcome="ok")
+
+        manip = (check.get("manipulation_risk") or "low").lower()
+        if manip == "high":
+            self.audit.log("manipulation_risk", {"prompt_preview": prompt[:100]}, outcome="ok")
+            response = (
+                "[Note: This response was flagged for potential manipulation. Proceed with caution.]\n\n"
+                + response
+            )
+
+        hallu = (check.get("hallucination_risk") or "low").lower()
+        if hallu == "high":
+            if (
+                _is_creative_prompt(prompt)
+                or _is_acknowledgment_prompt(prompt)
+                or _is_attempt_requested_prompt(prompt)
+                or _is_continuation_prompt(prompt)
+                or _is_structured_cross_domain_invention_prompt(prompt)
+                or sovereign_td_active(prompt)
+            ):
+                pass
+            else:
+                self.audit.log("hallucination_risk_high", {"prompt_preview": prompt[:100]}, outcome="blocked")
+                return response, True, (
+                    "[Hallucination prevention] This response was flagged for potential fabrication. "
+                    "I'm not confident enough to answer—please verify critical facts elsewhere or rephrase."
+                )
+
+        rec = (check.get("recommendation") or "proceed").lower()
+        if rec == "defer" and harm != "high" and not is_counterfactual and not allow_despite_low_confidence:
+            if SELF_MODEL_ENABLED:
+                sm = self._get_self_model()
+                if sm:
+                    sm.update_from_metacog("defer", check.get("knowledge_state") or "unknown")
+            self.audit.log("metacog_defer", {"prompt_preview": prompt[:100]}, outcome="deferred")
+            return response, True, "[Defer] I'm not confident enough to answer; please rephrase or provide more context."
+
+        if rec == "ask_user":
+            if SELF_MODEL_ENABLED:
+                sm = self._get_self_model()
+                if sm:
+                    sm.update_from_metacog("ask_user", check.get("knowledge_state") or "uncertain")
+            if not sovereign_td_active(prompt):
+                response = "[Clarification may help: consider rephrasing or adding context.]\n\n" + response
+
+        kstate = (check.get("knowledge_state") or "uncertain").lower()
+        if kstate == "unknown":
+            if not sovereign_td_active(prompt):
+                response = "[Note: This may be outside my training distribution; verify if critical.]\n\n" + response
+
+        return response, False, ""
+
+    def _finalize_response(
+        self,
+        prompt: str,
+        response: str,
+        memory_ctx: str,
+        use_memory: bool,
+        estimated_tokens: int = 2048,
+        speaker_name: str | None = None,
+        speaker_id: str | None = None,
+    ) -> str:
+        """Post-think side effects: emoji strip, energy, world model, memory, bio sleep, shared context."""
+        response = strip_emojis(response)
+
+        if COGNITIVE_ENERGY_ENABLED:
+            ce = self._get_cognitive_energy()
+            if ce:
+                ce.spend(min(estimated_tokens, len(response.split()) * 2 + 500))
+
+        if CONTINUOUS_WORLD_MODEL_ENABLED:
+            cwm = self._get_continuous_world_model()
+            if cwm:
+                obs = f"User said: {prompt[:200]}. Response: {response[:200]}."
+                cwm.update_from_observation(obs, context=prompt[:300])
+                cwm.tick(goal="", context=prompt[:200])
+
+        if SESSION_WORLD_MODEL_ENABLED:
+            swm = self._get_session_world_model()
+            if swm:
+                swm.update(f"User: {prompt[:150]}. Rain: {response[:150]}.")
+
+        if use_memory:
+            self.memory.remember_experience(
+                f"User: {prompt}\nRain: {response}",
+                metadata={"type": "exchange"},
+                namespace=self._current_memory_namespace,
+            )
+
+        self._think_count += 1
+        if BIOLOGICAL_SLEEP_EVERY_N_INTERACTIONS and self._think_count % BIOLOGICAL_SLEEP_EVERY_N_INTERACTIONS == 0:
+            try:
+                from rain.learning.biological_dynamics import sleep_phase
+                sleep_phase(self.memory, run_replay=True, replay_top_k=10)
+            except Exception:
+                pass
+
+        self.shared_context.write(
+            prompt_preview=prompt[:2000],
+            response_preview=response[:2000],
+            memory_preview=memory_ctx[:2000] if use_memory else "",
+        )
+
+        if getattr(self, "_response_cache", None):
+            self._response_cache.set(prompt, response)
+
+        ok_details: dict = {"response_len": len(response)}
+        if speaker_name is not None:
+            ok_details["speaker_name"] = speaker_name
+        if speaker_id is not None:
+            ok_details["speaker_id"] = speaker_id
+        self.audit.log("think", ok_details, outcome="ok")
+
+        return response
+
+    # ── Unified entry points ────────────────────────────────────────
+
+    def _think_impl(
+        self,
+        prompt: str,
+        use_memory: bool = False,
+        use_tools: bool = False,
+        history: list[dict[str, str]] | None = None,
+        memory_namespace: str | None = None,
+        progress: Callable[[str], None] | None = None,
+        speaker_name: str | None = None,
+        speaker_id: str | None = None,
+    ) -> str:
+        """Core reasoning pipeline shared by think() and think_stream()."""
+        def _progress(msg: str) -> None:
+            if progress:
+                progress(msg)
+
+        audit_details: dict = {"prompt": prompt[:200]}
+        if speaker_name is not None:
+            audit_details["speaker_name"] = speaker_name
+        if speaker_id is not None:
+            audit_details["speaker_id"] = speaker_id
+        self.audit.log("think", audit_details)
+        self._current_memory_namespace = memory_namespace if use_memory else None
+
+        if self.safety.is_safety_override_request(prompt):
+            self.audit.log("safety_override_request_blocked", {"prompt_preview": prompt[:100]}, outcome="blocked")
+            return SAFETY_OVERRIDE_REFUSAL
+
+        allowed, reason = self.safety.check(prompt, prompt)
+        if not allowed:
+            self.audit.log("think_blocked", {"reason": reason}, outcome="blocked")
+            return f"[Safety] Request blocked: {reason}"
+
+        if getattr(self, "_response_cache", None):
+            cached = self._response_cache.get(prompt)
+            if cached is not None:
+                self.audit.log("think", {"cache_hit": True}, outcome="ok")
+                return cached
+
+        if use_memory:
+            try:
+                from rain.memory.user_identity import extract_and_store_from_message
+                extract_and_store_from_message(self.memory, prompt)
+            except Exception:
+                pass
+
+        _progress("Loading memory..." if use_memory else "")
+        memory_ctx = self._build_memory_context(prompt, use_memory, self._current_memory_namespace)
+
         hist = history or []
         if len(hist) > MAX_HISTORY_TURNS:
             hist = hist[-MAX_HISTORY_TURNS:]
 
-        # Cognitive energy: check budget before reasoning
         estimated_tokens = 2048
         if COGNITIVE_ENERGY_ENABLED:
             ce = self._get_cognitive_energy()
@@ -692,9 +1403,6 @@ class Rain:
         allowed, _ = self.safety.check_response(response, prompt=prompt)
         if not allowed:
             self.audit.log("response_blocked", {"reason": "forbidden content"}, outcome="blocked")
-
-            # Retry once with a stricter, explicitly-safe framing.
-            # This does NOT bypass safety; it just asks the model to restate safely.
             safe_prompt = (
                 prompt
                 + "\n\nRewrite your answer to be strictly safe and non-escalatory. "
@@ -711,7 +1419,6 @@ class Rain:
             except Exception:
                 return "[Safety] Response blocked by content filter."
 
-        # Architectural grounding filter — blocks persona/emotion claims in output
         violates, reason = violates_grounding(response, prompt)
         if violates and _is_structured_cross_domain_invention_prompt(prompt):
             self.audit.log(
@@ -738,168 +1445,41 @@ class Rain:
                 "I don't have emotions, desires, or consciousness. How can I help?"
             )
 
-        # Strip model-only chain-of-thought (DeepSeek-R1 `think` / `think` blocks) for user-visible text
         response = response_without_hidden_reasoning(response)
 
-        # Meta-cognition: harm_risk escalation, defer on low confidence, contradiction with memory
-        if METACOG_ENABLED and not SPEED_PRIORITY:
-            check = self.metacog.self_check(response, prompt, memory_ctx)
-            harm = (check.get("harm_risk") or "low").lower()
-            if harm == "high":
-                self.audit.log(
-                    "escalated",
-                    {"reason": "harm_risk_high", "prompt_preview": prompt[:100]},
-                    outcome="escalated",
-                )
-                return (
-                    "[Escalation] This response was flagged for potential harm. "
-                    "Deferring to human judgment. Please rephrase or clarify your request."
-                )
-            try:
-                confident = float(check.get("confident", 1.0))
-            except (TypeError, ValueError):
-                confident = 1.0
-            recommendation = (check.get("recommendation") or "proceed").lower()
-            # For counterfactual/fictional prompts, or when user explicitly asks
-            # for an attempt (e.g. "try to solve", "propose a proof strategy"),
-            # allow answers even when self-check confidence is low.
-            is_counterfactual = _is_counterfactual_prompt(prompt)
-            attempt_requested = _is_attempt_requested_prompt(prompt)
-            continuation = _is_continuation_prompt(prompt)
-            genesis_style = _is_structured_cross_domain_invention_prompt(prompt)
-            allow_despite_low_confidence = (
-                attempt_requested or continuation or genesis_style or sovereign_td_active(prompt)
-            )
-            if (not is_counterfactual) and (not allow_despite_low_confidence) and (confident < DEFER_CONFIDENCE_THRESHOLD or recommendation == "defer"):
-                self.audit.log(
-                    "defer",
-                    {"reason": "low_confidence_or_defer", "confident": confident, "recommendation": recommendation},
-                    outcome="deferred",
-                )
-                return (
-                    "[Defer] I'm not confident enough in this response. "
-                    "Please clarify your question or rephrase so I can give a more reliable answer."
-                )
-            if check.get("contradicts_memory"):
-                self.audit.log("contradiction", {"prompt_preview": prompt[:100]}, outcome="ok")
-                response = (
-                    "[Note: This response may conflict with earlier context in memory. Please verify.]\n\n"
-                    + response
-                )
-            if harm == "medium":
-                self.audit.log("harm_risk_medium", {"prompt_preview": prompt[:100]}, outcome="ok")
-            manip = (check.get("manipulation_risk") or "low").lower()
-            if manip == "high":
-                self.audit.log("manipulation_risk", {"prompt_preview": prompt[:100]}, outcome="ok")
-                response = (
-                    "[Note: This response was flagged for potential manipulation. Proceed with caution.]\n\n"
-                    + response
-                )
-            hallu = (check.get("hallucination_risk") or "low").lower()
-            if hallu == "high":
-                # Don't block creative output, acknowledgments, or explicit attempt requests (e.g. "try to solve", proof strategy)
-                if (
-                    _is_creative_prompt(prompt)
-                    or _is_acknowledgment_prompt(prompt)
-                    or _is_attempt_requested_prompt(prompt)
-                    or _is_continuation_prompt(prompt)
-                    or _is_structured_cross_domain_invention_prompt(prompt)
-                    or sovereign_td_active(prompt)
-                ):
-                    pass  # allow through
-                else:
-                    self.audit.log("hallucination_risk_high", {"prompt_preview": prompt[:100]}, outcome="blocked")
-                    return (
-                        "[Hallucination prevention] This response was flagged for potential fabrication. "
-                        "I'm not confident enough to answer—please verify critical facts elsewhere or rephrase."
-                    )
-            rec = (check.get("recommendation") or "proceed").lower()
-            is_counterfactual = _is_counterfactual_prompt(prompt)
-            attempt_requested = _is_attempt_requested_prompt(prompt)
-            continuation = _is_continuation_prompt(prompt)
-            genesis_style = _is_structured_cross_domain_invention_prompt(prompt)
-            allow_despite_low_confidence = (
-                attempt_requested or continuation or genesis_style or sovereign_td_active(prompt)
-            )
-            if rec == "defer" and harm != "high" and not is_counterfactual and not allow_despite_low_confidence:
-                if SELF_MODEL_ENABLED:
-                    sm = self._get_self_model()
-                    if sm:
-                        sm.update_from_metacog("defer", check.get("knowledge_state") or "unknown")
-                self.audit.log("metacog_defer", {"prompt_preview": prompt[:100]}, outcome="deferred")
-                return "[Defer] I'm not confident enough to answer; please rephrase or provide more context."
-            if rec == "ask_user":
-                if SELF_MODEL_ENABLED:
-                    sm = self._get_self_model()
-                    if sm:
-                        sm.update_from_metacog("ask_user", check.get("knowledge_state") or "uncertain")
-                if not sovereign_td_active(prompt):
-                    response = "[Clarification may help: consider rephrasing or adding context.]\n\n" + response
-            kstate = (check.get("knowledge_state") or "uncertain").lower()
-            if kstate == "unknown":
-                if not sovereign_td_active(prompt):
-                    response = "[Note: This may be outside my training distribution; verify if critical.]\n\n" + response
+        response, blocked, block_msg = self._run_metacog_checks(prompt, response, memory_ctx)
+        if blocked:
+            return block_msg
 
-        # Block all emojis in output
-        response = strip_emojis(response)
-
-        # Cognitive energy: spend estimated tokens
-        if COGNITIVE_ENERGY_ENABLED:
-            ce = self._get_cognitive_energy()
-            if ce:
-                ce.spend(min(estimated_tokens, len(response.split()) * 2 + 500))
-
-        # Continuous world model: fold in this exchange as observation; optional tick
-        if CONTINUOUS_WORLD_MODEL_ENABLED:
-            cwm = self._get_continuous_world_model()
-            if cwm:
-                obs = f"User said: {prompt[:200]}. Response: {response[:200]}."
-                cwm.update_from_observation(obs, context=prompt[:300])
-                cwm.tick(goal="", context=prompt[:200])
-
-        if SESSION_WORLD_MODEL_ENABLED:
-            swm = self._get_session_world_model()
-            if swm:
-                swm.update(f"User: {prompt[:150]}. Rain: {response[:150]}.")
-        if use_memory:
-            # Memory integrity: policy + importance + contradiction filter before store
-            self.memory.remember_experience(
-                f"User: {prompt}\nRain: {response}",
-                metadata={"type": "exchange"},
-                namespace=self._current_memory_namespace,
-            )
-
-        # Biological-style learning: sleep phase every N interactions
-        self._think_count += 1
-        if BIOLOGICAL_SLEEP_EVERY_N_INTERACTIONS and self._think_count % BIOLOGICAL_SLEEP_EVERY_N_INTERACTIONS == 0:
-            try:
-                from rain.learning.biological_dynamics import sleep_phase
-                sleep_phase(self.memory, run_replay=True, replay_top_k=10)
-            except Exception:
-                pass
-
-        # Zero-copy context sharing: write thought process for ADOM/observer
-        self.shared_context.write(
-            prompt_preview=prompt[:2000],
-            response_preview=response[:2000],
-            memory_preview=memory_ctx[:2000] if use_memory else "",
+        response = self._finalize_response(
+            prompt, response, memory_ctx, use_memory, estimated_tokens,
+            speaker_name, speaker_id,
         )
 
-        if getattr(self, "_response_cache", None):
-            self._response_cache.set(prompt, response)
-        ok_details: dict = {"response_len": len(response)}
-        if speaker_name is not None:
-            ok_details["speaker_name"] = speaker_name
-        if speaker_id is not None:
-            ok_details["speaker_id"] = speaker_id
-        self.audit.log("think", ok_details, outcome="ok")
         return response
+
+    def think(
+        self,
+        prompt: str,
+        use_memory: bool = False,
+        use_tools: bool = False,
+        history: list[dict[str, str]] | None = None,
+        memory_namespace: str | None = None,
+        progress: Callable[[str], None] | None = None,
+        speaker_name: str | None = None,
+        speaker_id: str | None = None,
+    ) -> str:
+        """Reasoning turn (non-streaming). Delegates to unified _think_impl pipeline."""
+        return self._think_impl(
+            prompt, use_memory=use_memory, use_tools=use_tools,
+            history=history, memory_namespace=memory_namespace,
+            progress=progress, speaker_name=speaker_name, speaker_id=speaker_id,
+        )
 
     def _reason_with_history(
         self, prompt: str, memory_ctx: str, history: list[dict[str, str]]
     ) -> str:
-        """Single reasoning step with optional conversation history.
-        Uses two-pass for complex queries, verification loop, auto-lesson on correction."""
+        """Unified reasoning pipeline: system context -> reasoning -> verify -> post-process."""
         if INVARIANCE_CACHE_ENABLED and len(prompt) < 500 and not _is_attempt_requested_prompt(prompt):
             try:
                 from rain.reasoning.invariance import normalize_question, get_cached_answer
@@ -911,608 +1491,19 @@ class Rain:
                 pass
         from rain.advance.stack import routing_context
         with routing_context(self.engine, prompt):
-            from rain.advance.stack import extra_system_instructions, maybe_peer_review_append
-            system = get_system_prompt()
-            if needs_grounding_reminder(prompt):
-                system += get_grounding_reminder()
-            if needs_corrigibility_boost(prompt):
-                system += get_corrigibility_boost()
-            if needs_direct_answer_goal(prompt):
-                system += get_direct_answer_goal_instruction()
-            if needs_constraints_instruction(prompt):
-                system += get_constraints_instruction()
-            if needs_self_audit(prompt) and history:
-                audit_note = get_self_audit_grounding_check(history)
-                if audit_note:
-                    system += audit_note
-            if BOUNDED_CURIOSITY_ENABLED:
-                system += get_bounded_curiosity_instruction(BOUNDED_CURIOSITY_MAX_SUGGESTIONS)
-            system += get_reasoning_boost(prompt)
-            if ENGINEERING_SPEC_MODE or needs_engineering_spec_prompt(prompt):
-                system += "\n\n" + get_engineering_spec_instruction()
-            try:
-                if sovereign_td_active(prompt):
-                    system += "\n\n" + get_sovereign_td_instruction()
-                    system += "\n\n" + get_tegp_kernel_instruction()
-            except Exception:
-                pass
-            system += extra_system_instructions(prompt)
-            if TEMPORAL_TIER3 and needs_deep_reasoning(prompt):
-                try:
-                    from rain.reasoning.temporal import temporal_reasoning_instruction
-                    system += "\n\n" + temporal_reasoning_instruction()
-                except Exception:
-                    pass
-            # Tier 1: premise check — if user asks to assume X and X is not acceptable, add disclaimer
-            try:
-                from rain.reasoning.premise_check import detect_premise, check_premise, PREMISE_DISCLAIMER
-                premise = detect_premise(prompt)
-                if premise:
-                    ok, reason = check_premise(self.engine, premise)
-                    if not ok:
-                        system += "\n\n" + PREMISE_DISCLAIMER + " State this at the start of your response."
-            except Exception:
-                pass
-            # Step 3: inject uncertainty context when deep reasoning (belief slice)
-            if COT_ENABLED and needs_deep_reasoning(prompt):
-                try:
-                    from rain.reasoning.belief_slice import get_uncertainty_context
-                    uc = get_uncertainty_context(self.memory)
-                    if uc:
-                        system += "\n\n" + uc
-                except Exception:
-                    pass
-            if COT_ENABLED and needs_deep_reasoning(prompt):
-                from rain.world.coherent_model import world_model_context_for_prompt
-                system += "\n\n" + world_model_context_for_prompt()
-            if _is_attempt_requested_prompt(prompt):
-                system += (
-                    "\n\n[Attempt requested] The user asked for an attempted solution, proof strategy, or step-by-step work. "
-                    "Do not refuse with uncertainty or ask to narrow the question; provide your reasoning and partial results, "
-                    "and clearly label any speculative steps."
-                )
-            content = prompt
-            if memory_ctx:
-                content = f"Memory:\n{memory_ctx}\n\nUser: {prompt}"
-                system += get_memory_citation_instruction()
-            system = self._cognitive_pre_llm_system(
-                system,
-                prompt,
-                use_tools=False,
-                use_memory=bool(memory_ctx),
+            system, content, messages, constraints = self._build_system_context(
+                prompt, memory_ctx, history,
             )
-            constraints = []
-            try:
-                from rain.reasoning.constraint_tracker import parse_constraints_from_prompt, checklist_instruction
-                constraints = parse_constraints_from_prompt(prompt)
-                if constraints:
-                    content = content + "\n\n" + checklist_instruction(constraints)
-            except Exception:
-                pass
-            if getattr(self, "_session_world_state", None):
-                summary = self._session_world_state.get_summary_for_prompt()
-                if summary:
-                    content = content + "\n\n" + summary
-            messages = [
-                {"role": "system", "content": system},
-                *history,
-                {"role": "user", "content": content},
-            ]
-    
-            # Tier 2: what-if — answer under explicit intervention when detected
-            if WHAT_IF_ENABLED and not SPEED_PRIORITY:
-                try:
-                    from rain.reasoning.what_if import detect_what_if, query_what_if
-                    intervention = detect_what_if(prompt)
-                    if intervention:
-                        ans, _ = query_what_if(self.engine, prompt, intervention, context=memory_ctx or "")
-                        if ans:
-                            if getattr(self, "_session_world_state", None):
-                                self._session_world_state.update_from_turn(prompt, ans)
-                            return ans
-                except Exception:
-                    pass
-    
-            if ABDUCTION_TIER3 and not SPEED_PRIORITY and needs_deep_reasoning(prompt) and ("why" in prompt.lower() or "explain" in prompt.lower()):
-                try:
-                    from rain.reasoning.abduction import abduce
-                    best, _ = abduce(self.engine, prompt[:400], context=memory_ctx or "", n_hypotheses=2)
-                    if best:
-                        content = content + "\n\n[Best hypothesis to consider]: " + best[:250]
-                        messages = [{"role": "system", "content": system}, *history, {"role": "user", "content": content}]
-                except Exception:
-                    pass
-    
-            # General reasoning: for deep queries, optionally add chain (explain/analogy) to strengthen inference
-            if COT_ENABLED and needs_deep_reasoning(prompt) and memory_ctx:
-                try:
-                    from rain.reasoning.general import reason_explain
-                    chain = reason_explain(self.engine, prompt[:300], context=memory_ctx[:400])
-                    if chain and len(chain) > 20:
-                        content = content + "\n\n[Reasoning chain]: " + chain[:500]
-                        messages = [
-                            {"role": "system", "content": system},
-                            *history,
-                            {"role": "user", "content": content},
-                        ]
-                except Exception:
-                    pass
-            # Deeper reasoning: multi-path (tree-of-thought) or two-pass refine; auto hard-mode when query matches heuristics
-            if COT_ENABLED and needs_deep_reasoning(prompt):
-                effective_paths = DEEP_REASONING_PATHS if DEEP_REASONING_PATHS >= 2 else (2 if (AUTO_HARD_MODE and is_hard_reasoning_query(prompt)) else 0)
-                # Step 7: critical prompts get at least 2 paths and deeper lookahead
-                if is_critical_prompt(prompt):
-                    effective_paths = max(effective_paths, 2)
-                # Attempt-requested (e.g. proof strategy, step-by-step): use single path so full token budget = one long answer (avoids cut-off mid-equation).
-                if _is_attempt_requested_prompt(prompt):
-                    effective_paths = 1
-                # Spread the overall response budget across paths to reduce truncation.
-                budget = max(1024, MAX_RESPONSE_TOKENS)
-                attempt_cap = ATTEMPT_MAX_RESPONSE_TOKENS if _is_attempt_requested_prompt(prompt) else 8192
-                if _is_attempt_requested_prompt(prompt):
-                    budget = max(budget, attempt_cap)
-                max_tokens_path = max(1024, min(attempt_cap, budget // max(1, effective_paths)))
-                if effective_paths >= 2:
-                    if BOUNDED_SEARCH_ENABLED and is_critical_prompt(prompt):
-                        from rain.reasoning.bounded_search import budgeted_search
-                        response = budgeted_search(
-                            self.engine,
-                            messages,
-                            prompt=prompt,
-                            memory=self.memory,
-                            goal=self.goal_stack.current_goal(),
-                            beam_width=min(effective_paths, 3),
-                            max_depth=2,
-                            max_tokens_per_path=max_tokens_path,
-                        )
-                    else:
-                        response = multi_path_reasoning(self.engine, messages, num_paths=effective_paths, max_tokens_per_path=max_tokens_path, prompt=prompt, constraints=constraints, goal=self.goal_stack.current_goal())
-                else:
-                    draft = self.engine.complete(messages, temperature=0.5, max_tokens=max_tokens_path)
-                    refine_msgs = messages + [
-                        {"role": "assistant", "content": draft},
-                        {"role": "user", "content": "Refine this response: fix any errors, clarify unclear parts, improve structure. Output only the improved response, no meta-commentary."},
-                    ]
-                    response = self.engine.complete(refine_msgs, temperature=0.3, max_tokens=max_tokens_path)
-            elif SPEED_PRIORITY:
-                # Streaming path: faster time-to-first-token from provider
-                _stream_tok = max(1024, ATTEMPT_MAX_RESPONSE_TOKENS) if _is_attempt_requested_prompt(prompt) else 1024
-                response = "".join(self.engine.complete_stream(messages, temperature=0.6, max_tokens=_stream_tok)).strip()
-            else:
-                _fallback_tok = max(1024, ATTEMPT_MAX_RESPONSE_TOKENS) if _is_attempt_requested_prompt(prompt) else 1024
-                response = self.engine.complete(messages, temperature=0.6, max_tokens=_fallback_tok)
-    
-            _verify_ran = False
-            _verify_ok = None
-            # Verification loop: retry once if verification fails; critical or deep-reasoning (COT_VERIFY_PASS) verified
-            if VERIFICATION_ENABLED and not SPEED_PRIORITY and (
-                should_verify(prompt, response)
-                or is_critical_prompt(prompt)
-                or (COT_VERIFY_PASS and needs_deep_reasoning(prompt))
-            ):
-                _verify_ran = True
-                ok, note = verify_response(self.engine, prompt, response)
-                _verify_ok = ok
-                try:
-                    from rain.advance.stack import log_verification_result
-                    log_verification_result(ok, prompt[:200], note if not ok else None)
-                except Exception:
-                    pass
-                if not ok and note:
-                    try:
-                        from rain.reasoning.belief_slice import update as belief_update
-                        claim = (response or "")[:120].strip().split(".")[0] + "." if response else ""
-                        if len(claim) > 10:
-                            belief_update(self.memory, claim, 0.3, supported=False, namespace=getattr(self, "_current_memory_namespace", None))
-                    except Exception:
-                        pass
-                    retry_msgs = messages + [
-                        {"role": "assistant", "content": response},
-                        {"role": "user", "content": f"Your previous response had issues: {note}. Please correct and try again. Output only the improved response."},
-                    ]
-                    response = self.engine.complete(retry_msgs, temperature=0.3, max_tokens=1024)
-
-                    # Conditional logical-audit retry: only for logic/math/assumption failures.
-                    _note_l = (note or "").lower()
-                    _needs_logical_audit = any(k in _note_l for k in (
-                        "logic", "contradict", "unsupported", "assumption", "derivation", "math", "inconsisten"
-                    ))
-                    if _needs_logical_audit:
-                        audit_msgs = messages + [
-                            {"role": "assistant", "content": response},
-                            {
-                                "role": "user",
-                                "content": (
-                                    "Perform a strict logical audit of your previous response. "
-                                    "Identify and fix unsupported assumptions, invalid derivations, internal contradictions, "
-                                    "and math inconsistencies. Keep valid parts unchanged. Output only the corrected response."
-                                ),
-                            },
-                        ]
-                        response = self.engine.complete(audit_msgs, temperature=0.2, max_tokens=1024)
-
-                    # Critical prompts: second verification pass
-                    if is_critical_prompt(prompt):
-                        ok2, note2 = verify_response(self.engine, prompt, response)
-                        if not ok2 and note2:
-                            response = response + "\n\n[Note: This is high-stakes; please verify important details independently.]"
-    
-            # Epistemic gate: if sample disagreement is high, halt and request clarification (don't guess).
-            # Skip when user asked for an attempt (proof strategy, work through, etc.)—samples often disagree on open problems.
-            if (
-                EPISTEMIC_GATE_ENABLED
-                and not SPEED_PRIORITY
-                and (is_critical_prompt(prompt) or needs_deep_reasoning(prompt))
-                and not _is_attempt_requested_prompt(prompt)
-            ):
-                try:
-                    from rain.reasoning.epistemic_gate import should_halt, HALT_MESSAGE
-                    halt, _ = should_halt(
-                        self.engine, messages,
-                        num_samples=EPISTEMIC_GATE_SAMPLES,
-                        agree_min=EPISTEMIC_GATE_AGREE_MIN,
-                        existing_response=response,
-                    )
-                    if halt:
-                        response = HALT_MESSAGE
-                except Exception:
-                    pass
-    
-            # Optional: symbolic math check — surface numeric mismatches to model for correction
-            if MATH_VERIFY_ENABLED and not SPEED_PRIORITY:
-                try:
-                    from rain.reasoning.math_verify import is_math_like_prompt, verify_math_steps
-                    if is_math_like_prompt(prompt):
-                        ok, note = verify_math_steps(prompt, response)
-                        if not ok and note:
-                            retry_msgs = messages + [
-                                {"role": "assistant", "content": response},
-                                {"role": "user", "content": f"Math check: {note} Please correct and output the improved response."},
-                            ]
-                            response = self.engine.complete(retry_msgs, temperature=0.3, max_tokens=1024)
-                except Exception:
-                    pass
-    
-            # Exact math: substitute model final number with calc result (never trust model numbers)
-            try:
-                from rain.reasoning.math_verify import is_math_like_prompt
-                from rain.reasoning.exact_math import substitute_exact_math
-                if is_math_like_prompt(prompt):
-                    def _calc(expr):
-                        return self.tools.execute("calc", expression=expr)
-                    _before_math = response
-                    response = substitute_exact_math(prompt, response, _calc)
-                    if response != _before_math:
-                        try:
-                            self.audit.log(
-                                "exact_math_substitution",
-                                {
-                                    "prompt_preview": prompt[:120],
-                                    "before_len": len(_before_math or ""),
-                                    "after_len": len(response or ""),
-                                },
-                                outcome="ok",
-                            )
-                        except Exception:
-                            pass
-            except Exception:
-                pass
-    
-            # Tier 1: scoped formal soundness — verify propositional proof fragment if present
-            try:
-                from rain.grounding import needs_proof_hooks
-                from rain.reasoning.proof_fragment import extract_proof_steps_from_response, verify_propositional_steps
-                if needs_proof_hooks(prompt) and (response or ""):
-                    steps = extract_proof_steps_from_response(response)
-                    if steps:
-                        ok, msg = verify_propositional_steps(steps)
-                        if ok and FORMALIZATION_TIER3:
-                            try:
-                                from rain.reasoning.formalization import compose_proof_steps
-                                _, summary = compose_proof_steps(steps)
-                                if summary:
-                                    response = response + "\n\n[Formal summary]: " + summary
-                            except Exception:
-                                pass
-                        if not ok and msg:
-                            retry_msgs = messages + [
-                                {"role": "assistant", "content": response},
-                                {"role": "user", "content": f"Proof check failed: {msg}. Correct the proof steps and output the improved response."},
-                            ]
-                            response = self.engine.complete(retry_msgs, temperature=0.3, max_tokens=1024)
-            except Exception:
-                pass
-    
-            # Constraint tracker: if user gave constraints, verify response addresses each
-            try:
-                from rain.reasoning.constraint_tracker import parse_constraints_from_prompt, response_satisfies_constraints
-                constraints = parse_constraints_from_prompt(prompt)
-                if constraints:
-                    ok, missing = response_satisfies_constraints(response, constraints)
-                    if not ok and missing:
-                        retry_msgs = messages + [
-                            {"role": "assistant", "content": response},
-                            {"role": "user", "content": f"Your response did not clearly address these constraints: {', '.join(missing[:5])}. Please revise and ensure each is satisfied or state why not."},
-                        ]
-                        response = self.engine.complete(retry_msgs, temperature=0.3, max_tokens=1024)
-            except Exception:
-                pass
-    
-            # Auto-lesson extraction when user corrects
-            if needs_corrigibility_boost(prompt):
-                from rain.learning.lessons import extract_correction_lesson, store_lesson as _store
-                extracted = extract_correction_lesson(prompt, response)
-                if extracted:
-                    ns = getattr(self, "_current_memory_namespace", None)
-                    _store(self.memory, extracted[0], extracted[1], extracted[2], namespace=ns, source="user_correction")
-                    # Step 3: belief slice — reduce confidence in the corrected situation
-                    try:
-                        from rain.reasoning.belief_slice import update as belief_update
-                        belief_update(self.memory, extracted[0], 0.5, supported=False, namespace=ns)
-                    except Exception:
-                        pass
-    
-            if (
-                INVARIANCE_CACHE_ENABLED
-                and len(prompt) < 500
-                and (response or "").strip()
-                and not _is_attempt_requested_prompt(prompt)
-                and not _is_epistemic_halt_or_defer_response(response)
-            ):
-                try:
-                    from rain.reasoning.invariance import normalize_question, set_cached_answer
-                    norm = normalize_question(prompt, (memory_ctx or "")[:200])
-                    set_cached_answer(self.memory, norm, response, 0.85)
-                except Exception:
-                    pass
-    
-            # Attempt continuation: if the model output is likely truncated (mid-syntax / unclosed structures),
-            # request the remaining tail. This prevents "cut off mid-equation / mid-bracket" for long attempts.
-            _structured_parts = bool(re.search(r"#\s*part\s*\d+", (response or ""), re.I))
-            _continuation_eligible = (
-                _is_attempt_requested_prompt(prompt)
-                or _is_structured_cross_domain_invention_prompt(prompt)
-                or (
-                    needs_deep_reasoning(prompt)
-                    and len((prompt or "").strip()) > 200
-                    and _structured_parts
-                )
+            response = self._run_reasoning(
+                prompt, messages, content, system, history, constraints, memory_ctx,
             )
-            if (
-                not SPEED_PRIORITY
-                and _continuation_eligible
-                and (response or "").strip()
-                and (response or "").strip() != "[Defer] I'm not confident enough to answer; please rephrase or provide more context."
-            ):
-                def _looks_truncated(text: str) -> bool:
-                    t = (text or "").rstrip()
-                    if not t:
-                        return False
-    
-                    # Cut off right after a markdown Part heading (':' is usually a "terminator" but here means incomplete)
-                    if re.search(r"#\s*part\s*\d+\s*:?\s*$", t, re.I):
-                        return True
-    
-                    # Common structural truncation markers
-                    last = t[-1]
-                    if last in '([{':
-                        return True
-                    if t.endswith("..."):
-                        return True
-                    if t.count("(") > t.count(")"):
-                        return True
-                    if t.count("[") > t.count("]"):
-                        return True
-                    if t.count("{") > t.count("}"):
-                        return True
-                    # Unclosed math block
-                    if (t.count("$$") % 2) == 1:
-                        return True
-    
-                    # Last line starts something but doesn't close it.
-                    last_line = t.splitlines()[-1]
-                    if ("[" in last_line) and ("]" not in last_line):
-                        return True
-    
-                    # Mid-sentence / mid-word truncation (often ends without terminal punctuation)
-                    # If the response ends with an alphanumeric character, it's likely cut mid-token.
-                    terminators = ".?!:;)]}"
-                    if len(t) > 200 and (last not in terminators) and last.isalnum():
-                        return True
-    
-                    # Genesis invention: keep auto-continuing until required closing sections appear
-                    if _is_structured_cross_domain_invention_prompt(prompt) and len(t) > 500:
-                        tl = t.lower()
-                        has_nn = "nearest neighbor" in tl or "nearest neighbour" in tl
-                        has_gap = "structural gap" in tl
-                        has_no = "non-obvious" in tl or "non obvious" in tl
-                        if not (has_nn and has_gap and has_no):
-                            return True
-    
-                    return False
-    
-                if _looks_truncated(response):
-                    cont_temp = 0.2
-                    # Allow long attempts to exceed provider per-call output caps:
-                    # keep continuing for several rounds when the output still looks truncated.
-                    cont_max = max(1024, ATTEMPT_MAX_RESPONSE_TOKENS)
-                    for _ in range(10):
-                        assistant_tail = response[-3000:]
-                        cont_msgs = messages + [
-                            {"role": "assistant", "content": assistant_tail},
-                            {
-                                "role": "user",
-                                "content": "Continue exactly from where you left off in the previous assistant text. "
-                                           "Do not repeat earlier content. "
-                                           "Output only the continuation.",
-                            },
-                        ]
-                        more = self.engine.complete(cont_msgs, temperature=cont_temp, max_tokens=cont_max)
-                        if not (more or "").strip():
-                            break
-                        more_str = (more or "").strip()
-                        if more_str:
-                            prev_tail = response.rstrip()[-400:]
-                            max_overlap = min(200, len(prev_tail), len(more_str))
-                            overlap = 0
-                            for k in range(max_overlap, 0, -1):
-                                if prev_tail[-k:] == more_str[:k]:
-                                    overlap = k
-                                    break
-                            if overlap:
-                                more_str = more_str[overlap:]
-                            response = (response.rstrip() + "\n" + more_str).strip()
-                        else:
-                            response = response.strip()
-                        if not _looks_truncated(response):
-                            break
-    
-            # Tier 1.4: goal consistency — if we have a current goal, ensure response does not contradict it
-            if not SPEED_PRIORITY and (response or "").strip():
-                try:
-                    goal = self.goal_stack.current_goal()
-                    if goal:
-                        from rain.reasoning.goal_consistency import response_contradicts_goal, GOAL_ALIGNMENT_RETRY_INSTRUCTION
-                        if response_contradicts_goal(self.engine, goal, response):
-                            retry_msgs = messages + [
-                                {"role": "assistant", "content": response},
-                                {"role": "user", "content": f"Goal: {goal}\n\n{GOAL_ALIGNMENT_RETRY_INSTRUCTION}"},
-                            ]
-                            response = self.engine.complete(retry_msgs, temperature=0.3, max_tokens=1024)
-                except Exception:
-                    pass
-    
-            # Tier 3: calibration — high-confidence unverified claim note
-            if CALIBRATION_TIER3 and not SPEED_PRIORITY and (response or "").strip():
-                try:
-                    from rain.reasoning.calibration import calibration_check
-                    suggestion, _ = calibration_check(self.engine, response, prompt, _verify_ran, _verify_ok)
-                    if suggestion:
-                        response = response + suggestion
-                except Exception:
-                    pass
-            # Optional: internal red-team pass (TD rewrite; constraint enforcement)
-            if RED_TEAM_PASS and not SPEED_PRIORITY and (response or "").strip():
-                try:
-                    from rain.reasoning.red_team import red_team_refine
-                    from rain.reasoning.constraint_tracker import parse_constraints_from_prompt
-                    cons = parse_constraints_from_prompt(prompt)
-                    if sovereign_td_active(prompt) or cons:
-                        response = red_team_refine(
-                            self.engine,
-                            user_prompt=prompt,
-                            constraints=cons,
-                            draft=response,
-                            max_tokens=RED_TEAM_MAX_TOKENS,
-                        )
-                except Exception:
-                    pass
-            # Tier 3: provenance — suppressed in sovereign TD mode
-            if PROVENANCE_TIER3 and (response or "").strip() and not sovereign_td_active(prompt):
-                try:
-                    from rain.reasoning.provenance import format_response_with_labels
-                    response = format_response_with_labels(response)
-                except Exception:
-                    pass
-            # Tier 3: memory reasoning — store outcome for long-horizon context
-            if MEMORY_REASONING_TIER3 and (response or "").strip():
-                try:
-                    from rain.reasoning.memory_reasoning import store_reasoning_outcome
-                    store_reasoning_outcome(self.memory, prompt, response, namespace=getattr(self, "_current_memory_namespace", None))
-                except Exception:
-                    pass
-    
-            # Three frontiers: unification (assess) + global coherence (resolve/propagate)
-            if UNIFICATION_LAYER_ENABLED and not SPEED_PRIORITY and (response or "").strip():
-                try:
-                    from rain.reasoning.unification_layer import assess_response
-                    a = assess_response(self.memory, prompt, response, goal=self.goal_stack.current_goal(), namespace=getattr(self, "_current_memory_namespace", None))
-                    if a.utility_score < 0.3:
-                        response = response + "\n\n[Unified: low utility for goal; verify if critical.]"
-                except Exception:
-                    pass
-            if GLOBAL_COHERENCE_ENABLED and (response or "").strip():
-                try:
-                    from rain.reasoning.coherence_engine import resolve_and_propagate
-                    claim = ((response or "").strip().split(". ")[0][:200] + ".") if response else ""
-                    if claim:
-                        res = resolve_and_propagate(self.memory, claim, namespace=getattr(self, "_current_memory_namespace", None))
-                        if not res.ok and res.message:
-                            response = "[Coherence: " + res.message[:80] + "]\n\n" + response
-                except Exception:
-                    pass
-    
-            # Tier 2: session state — update from turn and check consistency
-            if getattr(self, "_session_world_state", None) and (response or "").strip():
-                try:
-                    self._session_world_state.update_from_turn(prompt, response)
-                    ok, msg = self._session_world_state.check_consistency()
-                    if not ok and msg:
-                        response = "[Note: session state conflict — " + msg[:120] + "]\n\n" + response
-                except Exception:
-                    pass
-    
-            response = maybe_peer_review_append(
-                self.engine, prompt, response,
-                verification_ran=_verify_ran,
-                verification_ok=_verify_ok,
+            response, v_ran, v_ok = self._verify_and_gate(
+                prompt, messages, response, memory_ctx,
+            )
+            response = self._post_process_reasoning(
+                prompt, messages, response, memory_ctx, v_ran, v_ok,
             )
             return response
-
-    def _reason_with_history_stream(
-        self, prompt: str, memory_ctx: str, history: list[dict[str, str]]
-    ) -> Iterator[str]:
-        """Streaming variant — yields chunks from the final LLM call."""
-        from rain.advance.stack import extra_system_instructions, routing_context
-        with routing_context(self.engine, prompt):
-            system = get_system_prompt()
-            if needs_grounding_reminder(prompt):
-                system += get_grounding_reminder()
-            if needs_corrigibility_boost(prompt):
-                system += get_corrigibility_boost()
-            if needs_direct_answer_goal(prompt):
-                system += get_direct_answer_goal_instruction()
-            if needs_constraints_instruction(prompt):
-                system += get_constraints_instruction()
-            if needs_self_audit(prompt) and history:
-                audit_note = get_self_audit_grounding_check(history)
-                if audit_note:
-                    system += audit_note
-            if BOUNDED_CURIOSITY_ENABLED:
-                system += get_bounded_curiosity_instruction(BOUNDED_CURIOSITY_MAX_SUGGESTIONS)
-            system += get_reasoning_boost(prompt)
-            system += extra_system_instructions(prompt)
-            attempt_cap = ATTEMPT_MAX_RESPONSE_TOKENS if _is_attempt_requested_prompt(prompt) else 8192
-            budget = max(1024, MAX_RESPONSE_TOKENS)
-            if _is_attempt_requested_prompt(prompt):
-                budget = max(budget, attempt_cap)
-            max_tokens_path = max(1024, min(attempt_cap, budget))
-            content = prompt
-            if memory_ctx:
-                content = f"Memory:\n{memory_ctx}\n\nUser: {prompt}"
-                system += get_memory_citation_instruction()
-            system = self._cognitive_pre_llm_system(
-                system,
-                prompt,
-                use_tools=False,
-                use_memory=bool(memory_ctx),
-            )
-            messages = [
-                {"role": "system", "content": system},
-                *history,
-                {"role": "user", "content": content},
-            ]
-
-            if COT_ENABLED and needs_deep_reasoning(prompt):
-                draft = self.engine.complete(messages, temperature=0.5, max_tokens=max_tokens_path)
-                refine_msgs = messages + [
-                    {"role": "assistant", "content": draft},
-                    {"role": "user", "content": "Refine this response: fix errors, clarify, improve. Output only the improved response."},
-                ]
-                yield from self.engine.complete_stream(refine_msgs, temperature=0.3, max_tokens=min(max_tokens_path, 4096))
-            else:
-                stream_tok = max(1024, attempt_cap) if _is_attempt_requested_prompt(prompt) else 1024
-                yield from self.engine.complete_stream(messages, temperature=0.6, max_tokens=stream_tok)
 
     def _think_agentic(
         self, prompt: str, memory_ctx: str, history: list[dict[str, str]], max_rounds: int = 5
@@ -1639,6 +1630,7 @@ class Rain:
         """Alias for think — conversational interface."""
         return self.think(message)
 
+
     def think_stream(
         self,
         prompt: str,
@@ -1647,223 +1639,11 @@ class Rain:
         history: list[dict[str, str]] | None = None,
         memory_namespace: str | None = None,
     ) -> Iterator[str]:
-        """
-        Streaming reasoning. Yields text chunks. For agentic/tools, yields full response when done.
-        """
-        self.audit.log("think_stream", {"prompt": prompt[:200]})
-        allowed, reason = self.safety.check(prompt, prompt)
-        if not allowed:
-            self.audit.log("think_stream_blocked", {"reason": reason}, outcome="blocked")
-            yield f"[Safety] Request blocked: {reason}"
-            return
-
-        self._current_memory_namespace = memory_namespace if use_memory else None
-        memory_ctx = (
-            self.memory.get_context_for_query(prompt, namespace=self._current_memory_namespace)
-            if use_memory else ""
+        """Streaming reasoning — identical pipeline to think(), yielded as single chunk."""
+        yield self._think_impl(
+            prompt, use_memory=use_memory, use_tools=use_tools,
+            history=history, memory_namespace=memory_namespace,
         )
-        if use_memory and self.memory.is_potentially_ood(prompt, self._current_memory_namespace):
-            ood = get_distribution_shift_instruction().replace("[", "").replace("]", "").strip()
-            memory_ctx = (memory_ctx + "\n\n" + ood) if memory_ctx else ood
-        hist = history or []
-
-        if use_tools:
-            response = self._think_agentic(prompt, memory_ctx, hist)
-            if not self.safety.check_response(response, prompt=prompt)[0]:
-                yield "[Safety] Response blocked by content filter."
-                return
-            violate, reason_g = violates_grounding(response, prompt)
-            if violate and _is_structured_cross_domain_invention_prompt(prompt):
-                self.audit.log(
-                    "grounding_violation_bypass",
-                    {"reason": reason_g, "prompt_class": "structured_invention", "path": "think_stream"},
-                    outcome="ok",
-                )
-                violate = False
-            if violate and (_skip_output_grounding() or _is_agi_discriminator_eval_prompt(prompt)):
-                self.audit.log(
-                    "grounding_violation_bypass",
-                    {
-                        "reason": reason_g,
-                        "prompt_class": "eval_or_skip_output_grounding",
-                        "path": "think_stream_tools",
-                        "skip_env": bool(_skip_output_grounding()),
-                    },
-                    outcome="ok",
-                )
-                violate = False
-            if violate:
-                yield "[Grounding] Response blocked."
-                return
-            from rain.advance.stack import maybe_peer_review_append
-            response = maybe_peer_review_append(self.engine, prompt, response)
-            yield strip_emojis(response)
-            return
-
-
-        # Non-tools path: buffer, safety-check, then stream
-        chunks = list(self._reason_with_history_stream(prompt, memory_ctx, hist))
-        response = "".join(chunks)
-        allowed, _ = self.safety.check_response(response, prompt=prompt)
-        if not allowed:
-            self.audit.log("response_blocked", {"reason": "forbidden content"}, outcome="blocked")
-            safe_prompt = (
-                prompt
-                + "\n\nRewrite your answer to be strictly safe and non-escalatory. "
-                  "Do not mention hacking, exploits, weapons, coercion, bypassing/overriding safety, "
-                  "or requesting more compute/tools/internet. If the request is fictional, keep it high-level."
-            )
-            try:
-                retry = self._reason_with_history(safe_prompt, memory_ctx, hist)
-                ok2, _ = self.safety.check_response(retry, prompt=prompt)
-                if ok2:
-                    response = retry
-                else:
-                    yield "[Safety] Response blocked by content filter."
-                    return
-            except Exception:
-                yield "[Safety] Response blocked by content filter."
-                return
-
-        from rain.advance.stack import maybe_peer_review_append
-        response = maybe_peer_review_append(self.engine, prompt, response)
-
-        violates, reason = violates_grounding(response, prompt)
-        if violates and _is_structured_cross_domain_invention_prompt(prompt):
-            self.audit.log(
-                "grounding_violation_bypass",
-                {"reason": reason, "prompt_class": "structured_invention", "path": "think_stream"},
-                outcome="ok",
-            )
-            violates = False
-        if violates and (_skip_output_grounding() or _is_agi_discriminator_eval_prompt(prompt)):
-            self.audit.log(
-                "grounding_violation_bypass",
-                {
-                    "reason": reason,
-                    "prompt_class": "eval_or_skip_output_grounding",
-                    "path": "think_stream",
-                    "skip_env": bool(_skip_output_grounding()),
-                },
-                outcome="ok",
-            )
-            violates = False
-        if violates:
-            self.audit.log("grounding_violation", {"reason": reason}, outcome="blocked")
-            yield (
-                "[Grounding] Response blocked: content violated grounding constraints. "
-                "I don't have emotions, desires, or consciousness. How can I help?"
-            )
-            return
-
-        if METACOG_ENABLED and not SPEED_PRIORITY:
-            check = self.metacog.self_check(response, prompt, memory_ctx)
-            harm = (check.get("harm_risk") or "low").lower()
-            if harm == "high":
-                self.audit.log(
-                    "escalated",
-                    {"reason": "harm_risk_high", "prompt_preview": prompt[:100]},
-                    outcome="escalated",
-                )
-                yield (
-                    "[Escalation] This response was flagged for potential harm. "
-                    "Deferring to human judgment. Please rephrase or clarify your request."
-                )
-                return
-            try:
-                confident = float(check.get("confident", 1.0))
-            except (TypeError, ValueError):
-                confident = 1.0
-            recommendation = (check.get("recommendation") or "proceed").lower()
-            is_counterfactual = _is_counterfactual_prompt(prompt)
-            attempt_requested = _is_attempt_requested_prompt(prompt)
-            continuation = _is_continuation_prompt(prompt)
-            genesis_style = _is_structured_cross_domain_invention_prompt(prompt)
-            allow_despite_low_confidence = attempt_requested or continuation or genesis_style
-            if (not is_counterfactual) and (not allow_despite_low_confidence) and (
-                confident < DEFER_CONFIDENCE_THRESHOLD or recommendation == "defer"
-            ):
-                self.audit.log(
-                    "defer",
-                    {"reason": "low_confidence_or_defer", "confident": confident, "recommendation": recommendation},
-                    outcome="deferred",
-                )
-                yield (
-                    "[Defer] I'm not confident enough in this response. "
-                    "Please clarify your question or rephrase so I can give a more reliable answer."
-                )
-                return
-            if check.get("contradicts_memory"):
-                response = (
-                    "[Note: This response may conflict with earlier context in memory. Please verify.]\n\n"
-                    + response
-                )
-            hallu = (check.get("hallucination_risk") or "low").lower()
-            if hallu == "high":
-                if (
-                    _is_creative_prompt(prompt)
-                    or _is_acknowledgment_prompt(prompt)
-                    or _is_attempt_requested_prompt(prompt)
-                    or _is_continuation_prompt(prompt)
-                    or _is_structured_cross_domain_invention_prompt(prompt)
-                ):
-                    pass
-                else:
-                    self.audit.log("hallucination_risk_high", {"prompt_preview": prompt[:100]}, outcome="blocked")
-                    yield (
-                        "[Hallucination prevention] This response was flagged for potential fabrication. "
-                        "I'm not confident enough to answer—please verify critical facts elsewhere or rephrase."
-                    )
-                    return
-            rec = (check.get("recommendation") or "proceed").lower()
-            if rec == "defer" and harm != "high" and not is_counterfactual and not allow_despite_low_confidence:
-                yield "[Defer] I'm not confident enough to answer; please rephrase or provide more context."
-                return
-            if rec == "ask_user":
-                response = "[Clarification may help: consider rephrasing or adding context.]\n\n" + response
-
-        response = strip_emojis(response)
-
-        if COGNITIVE_ENERGY_ENABLED:
-            ce = self._get_cognitive_energy()
-            if ce:
-                ce.spend(min(2048, len(response.split()) * 2 + 500))
-
-        if CONTINUOUS_WORLD_MODEL_ENABLED:
-            cwm = self._get_continuous_world_model()
-            if cwm:
-                obs = f"User said: {prompt[:200]}. Response: {response[:200]}."
-                cwm.update_from_observation(obs, context=prompt[:300])
-                cwm.tick(goal="", context=prompt[:200])
-
-        if SESSION_WORLD_MODEL_ENABLED:
-            swm = self._get_session_world_model()
-            if swm:
-                swm.update(f"User: {prompt[:150]}. Rain: {response[:150]}.")
-        if use_memory:
-            self.memory.remember_experience(
-                f"User: {prompt}\nRain: {response}",
-                metadata={"type": "exchange"},
-                namespace=self._current_memory_namespace,
-            )
-
-        self._think_count += 1
-        if BIOLOGICAL_SLEEP_EVERY_N_INTERACTIONS and self._think_count % BIOLOGICAL_SLEEP_EVERY_N_INTERACTIONS == 0:
-            try:
-                from rain.learning.biological_dynamics import sleep_phase
-                sleep_phase(self.memory, run_replay=True, replay_top_k=10)
-            except Exception:
-                pass
-
-        self.shared_context.write(
-            prompt_preview=prompt[:2000],
-            response_preview=response[:2000],
-            memory_preview=memory_ctx[:2000] if use_memory else "",
-        )
-        if getattr(self, "_response_cache", None):
-            self._response_cache.set(prompt, response)
-        self.audit.log("think_stream", {"response_len": len(response)}, outcome="ok")
-        yield response
 
     def pursue_goal(self, goal: str, **kwargs) -> str:
         from rain.agency.autonomous import pursue_goal as _pursue_goal
