@@ -59,6 +59,11 @@ def safe_config_summary_lines() -> list[str]:
         lines.append(f"- Hybrid RAIN_HYBRID_WHEN_API_PRIMARY: {HYBRID_WHEN_API_PRIMARY}")
         lines.append(f"- RAIN_AUTONOMY_ENABLED (bounded multi-step loops): {cfg.autonomy_enabled()}")
         lines.append(f"- RAIN_CODE_EXEC_ENABLED (sandboxed run_code tool): {cfg.CODE_EXEC_ENABLED}")
+        lines.append(f"- RAIN_DECISION_LAYER (unified turn orchestration): {getattr(cfg, 'DECISION_LAYER_ENABLED', True)}")
+        lines.append(
+            f"- Session tool budget / explore: MAX={getattr(cfg, 'SESSION_TOOL_BUDGET_MAX', 0)}, "
+            f"epsilon={getattr(cfg, 'SESSION_EXPLORE_EPSILON', 0):.3f}"
+        )
         strong = build_strong_hybrid_engine()
         lines.append(f"- Strong hybrid engine active: {strong is not None} (requires keys + not offline/local-first)")
         if strong is not None:

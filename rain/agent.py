@@ -100,6 +100,11 @@ from rain.config import (
     SKIP_OUTPUT_GROUNDING,
     USER_NAME,
     VERIFICATION_ENABLED,
+    DECISION_LAYER_ENABLED,
+    AGENTIC_MAX_ROUNDS_DEFAULT,
+    SESSION_TOOL_BUDGET_MAX,
+    TURN_FEEDBACK_LOG_ENABLED,
+    KNOWLEDGE_FACTS_TOOL_ENABLED,
     GI_STACK_ENABLED,
     GI_STRICT_ROUTING,
     STRUCTURED_MEMORY_V2_ENABLED,
@@ -220,6 +225,10 @@ class Rain:
         self.safety = SafetyVault()
         self.audit = AuditLog(DATA_DIR / "audit.log")
         self.shared_context = get_shared_context()
+        from rain.orchestration.explore_exploit import SessionExploreBudget
+
+        self._explore_budget = SessionExploreBudget()
+        self._turn_decision = None
         # Capability gating: when enabled, restricted tools need this callback to approve
         self.tool_approval_callback: Any = None
         self._current_memory_namespace: str | None = None
@@ -369,6 +378,20 @@ class Rain:
             "Store procedural knowledge (how to do X). Params: procedure (str)",
             {"procedure": "str"},
         )
+
+        if KNOWLEDGE_FACTS_TOOL_ENABLED:
+            def remember_fact(subject: str, predicate: str, obj: str = "") -> str:
+                from rain.knowledge.facts import get_fact_store
+
+                get_fact_store(DATA_DIR).add_fact(subject, predicate, obj, source="tool")
+                return "Structured fact recorded."
+
+            self.tools.register(
+                "remember_fact",
+                remember_fact,
+                "Store a subject–predicate–object fact for structured retrieval in later turns. Params: subject, predicate, object (optional)",
+                {"subject": "str", "predicate": "str", "object": "str"},
+            )
 
         def simulate(state: str, action: str) -> str:
             return self.simulator.simulate(state, action)
@@ -576,11 +599,30 @@ class Rain:
         self, prompt: str, use_memory: bool, namespace: str | None,
     ) -> str:
         """Build full memory context: retrieval, RAG, self-model, world model, cognitive energy, OOD."""
+        td = getattr(self, "_turn_decision", None)
         if not use_memory:
+            if td is not None:
+                parts: list[str] = []
+                if getattr(td, "knowledge_fragment", ""):
+                    parts.append(td.knowledge_fragment)
+                if getattr(td, "tom_fragment", ""):
+                    parts.append(td.tom_fragment)
+                if parts:
+                    return "\n\n".join(parts)
             return ""
+        top_k = MEMORY_RETRIEVAL_TOP_K
+        if td is not None:
+            top_k = td.memory_top_k
         memory_ctx = self.memory.get_context_for_query(
-            prompt, max_experiences=MEMORY_RETRIEVAL_TOP_K, namespace=namespace,
+            prompt, max_experiences=top_k, namespace=namespace,
         )
+        if td is not None:
+            if getattr(td, "knowledge_fragment", ""):
+                kf = td.knowledge_fragment
+                memory_ctx = (memory_ctx + "\n\n" + kf) if memory_ctx else kf
+            if getattr(td, "tom_fragment", ""):
+                tf = td.tom_fragment
+                memory_ctx = (memory_ctx + "\n\n" + tf) if memory_ctx else tf
         if RAG_ENABLED and (_is_factual_query(prompt) or RAG_ALWAYS_INJECT):
             try:
                 from rain.tools.rag import query_rag
@@ -695,6 +737,13 @@ class Rain:
         system = self._cognitive_pre_llm_system(
             system, prompt, use_tools=False, use_memory=bool(memory_ctx),
         )
+        if DECISION_LAYER_ENABLED and getattr(self, "_turn_decision", None) is not None:
+            try:
+                from rain.orchestration.decision_layer import decision_system_addon
+
+                system += decision_system_addon(self._turn_decision)
+            except Exception:
+                pass
         constraints: list = []
         try:
             from rain.reasoning.constraint_tracker import parse_constraints_from_prompt, checklist_instruction
@@ -1278,6 +1327,7 @@ class Rain:
         estimated_tokens: int = 2048,
         speaker_name: str | None = None,
         speaker_id: str | None = None,
+        use_tools: bool = False,
     ) -> str:
         """Post-think side effects: emoji strip, energy, world model, memory, bio sleep, shared context."""
         response = strip_emojis(response)
@@ -1322,6 +1372,24 @@ class Rain:
 
         if getattr(self, "_response_cache", None):
             self._response_cache.set(prompt, response)
+
+        if TURN_FEEDBACK_LOG_ENABLED:
+            try:
+                from rain.orchestration.feedback_loop import TurnFeedbackLog
+
+                td = getattr(self, "_turn_decision", None)
+                TurnFeedbackLog(DATA_DIR / "turn_feedback.jsonl").record(
+                    prompt_preview=prompt,
+                    response_preview=response,
+                    use_tools=use_tools,
+                    use_memory=use_memory,
+                    gi_mode=td.gi.mode.value if td else None,
+                    explore=bool(td and td.explore_path),
+                    outcome="ok",
+                    extra={"reasons": (td.reasons[:12] if td else [])},
+                )
+            except Exception:
+                pass
 
         ok_details: dict = {"response_len": len(response)}
         if speaker_name is not None:
@@ -1373,6 +1441,22 @@ class Rain:
                 self.audit.log("think", {"cache_hit": True}, outcome="ok")
                 return cached
 
+        self._turn_decision = None
+        if DECISION_LAYER_ENABLED:
+            try:
+                from rain.orchestration.decision_layer import compute_turn_decision
+
+                self._explore_budget.record_turn()
+                self._turn_decision = compute_turn_decision(
+                    self,
+                    prompt,
+                    use_tools=use_tools,
+                    use_memory=use_memory,
+                    safety_allowed=True,
+                )
+            except Exception:
+                self._turn_decision = None
+
         if use_memory:
             try:
                 from rain.memory.user_identity import extract_and_store_from_message
@@ -1396,7 +1480,10 @@ class Rain:
 
         _progress("Reasoning...")
         if use_tools:
-            response = self._think_agentic(prompt, memory_ctx, hist)
+            _mr = AGENTIC_MAX_ROUNDS_DEFAULT
+            if getattr(self, "_turn_decision", None) is not None:
+                _mr = self._turn_decision.tool_round_cap
+            response = self._think_agentic(prompt, memory_ctx, hist, max_rounds=_mr)
         else:
             response = self._reason_with_history(prompt, memory_ctx, hist)
 
@@ -1453,7 +1540,7 @@ class Rain:
 
         response = self._finalize_response(
             prompt, response, memory_ctx, use_memory, estimated_tokens,
-            speaker_name, speaker_id,
+            speaker_name, speaker_id, use_tools=use_tools,
         )
 
         return response
@@ -1546,6 +1633,13 @@ class Rain:
             use_tools=True,
             use_memory=bool(memory_ctx),
         )
+        if DECISION_LAYER_ENABLED and getattr(self, "_turn_decision", None) is not None:
+            try:
+                from rain.orchestration.decision_layer import decision_system_addon
+
+                system += decision_system_addon(self._turn_decision)
+            except Exception:
+                pass
         if getattr(self, "observation_buffer", None):
             obs = self.observation_buffer.get_grounding_context()
             if obs:
@@ -1558,6 +1652,15 @@ class Rain:
         ]
 
         for _ in range(max_rounds):
+            if SESSION_TOOL_BUDGET_MAX > 0 and self._explore_budget.tool_budget_exhausted(SESSION_TOOL_BUDGET_MAX):
+                messages.append(
+                    {
+                        "role": "user",
+                        "content": "[Session tool budget reached. Summarize from the context above without calling more tools.]",
+                    }
+                )
+                response = self.engine.complete(messages, temperature=0.3, max_tokens=2048)
+                return maybe_peer_review_append(self.engine, prompt, response.strip(), verification_ran=False, verification_ok=None)
             response = self.engine.complete(messages, temperature=0.5, max_tokens=2048)
             calls = parse_tool_calls(response)
 
@@ -1609,6 +1712,7 @@ class Rain:
                 blast_radius_callback=_blast_radius_callback,
             )
             results_str = format_tool_results(results)
+            self._explore_budget.record_tool_invocations(len(calls))
             self.audit.log("tool_calls", {"count": len(calls), "tools": [c.get("tool") for c in calls]})
             for (call, res) in results:
                 self.observation_buffer.append_tool_result(

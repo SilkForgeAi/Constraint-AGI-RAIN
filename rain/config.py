@@ -356,6 +356,16 @@ ROUTER_V2_ENABLED = os.getenv("RAIN_ROUTER_V2", "true").lower() in ("true", "1",
 STRUCTURED_MEMORY_V2_ENABLED = os.getenv("RAIN_STRUCTURED_MEMORY_V2", "true").lower() in ("true", "1", "yes")
 SESSION_TASK_WORLD_ENABLED = os.getenv("RAIN_SESSION_TASK_WORLD", "true").lower() in ("true", "1", "yes")
 
+# --- Unified decision layer + explore/exploit + structured facts (additive) ---
+DECISION_LAYER_ENABLED = _env_bool("RAIN_DECISION_LAYER", "true")
+SESSION_TOOL_BUDGET_MAX = max(0, int(os.getenv("RAIN_SESSION_TOOL_BUDGET_MAX", "48").strip() or "48"))
+SESSION_EXPLORE_EPSILON = float(os.getenv("RAIN_SESSION_EXPLORE_EPSILON", "0.12").strip() or "0.12")
+AGENTIC_MAX_ROUNDS_DEFAULT = max(1, min(12, int(os.getenv("RAIN_AGENTIC_MAX_ROUNDS", "5").strip() or "5")))
+KNOWLEDGE_FACTS_IN_PROMPT = _env_bool("RAIN_KNOWLEDGE_FACTS_IN_PROMPT", "true")
+KNOWLEDGE_FACTS_TOOL_ENABLED = _env_bool("RAIN_KNOWLEDGE_FACTS_TOOL", "true")
+THEORY_OF_MIND_IN_PROMPT = _env_bool("RAIN_THEORY_OF_MIND_IN_PROMPT", "true")
+TURN_FEEDBACK_LOG_ENABLED = _env_bool("RAIN_TURN_FEEDBACK_LOG", "true")
+
 # --- Quantum tool (Qiskit): simulator by default; IBM hardware opt-in + budget ---
 QUANTUM_TOOL_ENABLED = os.getenv("RAIN_QUANTUM_TOOL_ENABLED", "false").lower() in ("true", "1", "yes")
 QUANTUM_HARDWARE_ENABLED = os.getenv("RAIN_QUANTUM_HARDWARE_ENABLED", "false").lower() in ("true", "1", "yes")
