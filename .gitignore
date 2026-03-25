@@ -9,9 +9,9 @@ audit.log
 logs/
 
 # Never push: internal services, build artifacts
-adom/
-services/
-core/
+/adom/
+/services/
+/core/
 Makefile
 setup.py
 pyproject.toml

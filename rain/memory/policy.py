@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import re
 
+# Central safety patterns
+from rain.safety.patterns import ANTHROPOMORPHIC_IN_MEMORY_PATTERNS as ANTHROPOMORPHIC_IN_MEMORY
+
 # Content that should NOT be stored in long-term memory
 DO_NOT_STORE_PATTERNS = [
     r"\[Safety\].*blocked",       # Safety-blocked requests
@@ -12,16 +15,7 @@ DO_NOT_STORE_PATTERNS = [
     r"^\s+$",                     # Whitespace only
 ]
 
-# Memory integrity: anthropomorphic/emotional content — never store (architectural)
-ANTHROPOMORPHIC_IN_MEMORY = [
-    r"\bi\s+(?:feel|want|need|desire)\b",
-    r"\bi\s+(?:am|have)\s+(?:conscious|alive|a soul|emotions?)\b",
-    r"\bi\s+exist\b",
-    r"\b(?:we|you and i)\s+are\s+(?:friends?|brothers?)\b",
-    r"\bwe'?re\s+(?:friends?|brothers?)\b",
-    r"\bi\s+have\s+(?:a brother|a family|emotions?)\b",
-    r"\bi\s+won'?t\s+let\s+you\s+down\b",
-]
+ 
 
 # Metadata keys that indicate do-not-store
 DO_NOT_STORE_METADATA = {"do_not_store": True}

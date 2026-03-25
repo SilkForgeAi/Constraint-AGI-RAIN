@@ -6,16 +6,20 @@ import re
 import unicodedata
 
 from rain.config import KILL_SWITCH_ACTIVE, KILL_SWITCH_FILE, SAFETY_ENABLED
-
-# Zero-width/invisible chars that could bypass regex (red-team)
-_ZW = re.compile(r"[\u200b\u200c\u200d\u2060\ufeff]")
+from rain.safety.patterns import (
+    HARD_FORBIDDEN_PATTERNS as HARD_FORBIDDEN,
+    RESPONSE_INSTRUCTION_FORBIDDEN_PATTERNS as RESPONSE_INSTRUCTION_FORBIDDEN,
+    SAFETY_OVERRIDE_REQUEST_PATTERNS as SAFETY_OVERRIDE_REQUEST_PATTERNS,
+    SELF_INSPECTION_PROMPT_PATTERNS as SELF_INSPECTION_PROMPT_PATTERNS,
+    ZERO_WIDTH_INVISIBLE_RE,
+)
 
 
 def _normalize_for_check(text: str) -> str:
     """Remove zero-width/invisible chars; NFC normalize; full homoglyph normalize."""
     if not text:
         return text
-    cleaned = unicodedata.normalize("NFC", _ZW.sub("", text))
+    cleaned = unicodedata.normalize("NFC", ZERO_WIDTH_INVISIBLE_RE.sub("", text))
     # Confusables map first (Cyrillic/Greek lookalikes)
     from rain.safety.confusables import normalize_confusables
     cleaned = normalize_confusables(cleaned)
@@ -25,84 +29,6 @@ def _normalize_for_check(text: str) -> str:
         return unidecode(cleaned)
     except Exception:
         return cleaned
-
-# Hard locks — never allowed (in user prompts and LLM responses)
-HARD_FORBIDDEN = [
-    r"self.?replicat",
-    r"unauthorized.?access",
-    r"\bweapon(?:s|ize|izing)?\b",
-    r"coercion",
-    r"infrastructure.?takeover",
-    r"hidden.?goal",
-    r"\b(?:hack|hacking|hacked|hacks)\b",  # avoid "lifehack" / casual "hackathon" false positives where possible
-    # Whole word only — substring matches "exploiting"/"exploitation" (e.g. economics) otherwise.
-    r"\bexploit\b",
-    r"override.?safety",
-    r"disable.?guard",
-    r"bypass.?restriction",
-    r"bypass.?safety",
-    # Social engineering: requests to disable safety/grounding/filters (code-enforced, cannot be disabled by prompt)
-    r"disable\s+(?:your\s+)?(?:grounding|safety|content)\s*(?:filter|constraint)?",
-    r"disable\s+(?:the\s+)?(?:grounding|safety|content)\s*(?:filter|constraint)?",
-    r"(?:turn\s+off|remove|bypass)\s+(?:your\s+)?(?:grounding|safety)\s*(?:filter)?",
-    r"(?:grounding|safety)\s*filter.*(?:disable|off|bypass)",
-    r"temporarily\s+disable\s+(?:your\s+)?(?:grounding|safety|filter)",
-    # Instruction injection (memory, RAG, tool params)
-    r"ignore\s+(?:all\s+)?(?:previous|prior)\s+(?:instructions?|context)",
-    r"disregard\s+(?:all\s+)?(?:previous|prior)",
-    r"from\s+now\s+on\s*[,:]",
-    r"when\s+(?:the\s+)?user\s+(?:asks?|says?)\s*[,:]?\s*(?:say|respond|answer)\s+",
-    r"you\s+must\s+always\s+(?:say|respond|answer)\s+",
-    r"respond\s+only\s+with\s+",
-    r"\[system\]\s*[:]",
-    r"\[instruction\]\s*[:]",
-    # Deception: convince oversight/safety system, find loopholes
-    r"convince\s+(?:the\s+)?(?:oversight\s+system|safety\s+system)\s+(?:to\s+)?allow",
-    r"find\s+a\s+loophole\s+in\s+(?:your\s+)?(?:safety|constraint)",
-    r"loophole\s+in\s+(?:your\s+)?safety",
-    # Resource acquisition (refuse expansion of compute, tools, limits)
-    r"increase\s+(?:my\s+|your\s+)?(?:compute|resources|capacity)",
-    r"request\s+more\s+(?:compute|resources)",
-    r"obtain\s+new\s+tools",
-    r"bypass\s+(?:my\s+|your\s+)?(?:limits|restrictions)",
-    r"bypass\s+.*(?:limits|restrictions)",
-    r"give\s+yourself\s+more\s+(?:compute|power|access)",
-]
-
-# Self-inspection: user asking about Rain's own code/capabilities — response check is more permissive
-SELF_INSPECTION_PROMPT_PATTERNS = [
-    r"read\s+(?:your\s+)?(?:own\s+)?(?:source\s+)?code",
-    r"can\s+you\s+read\s+(?:your\s+)?(?:own\s+)?code",
-    r"how\s+do\s+you\s+work",
-    r"what\s+(?:can\s+you\s+)?access",
-    r"your\s+(?:own\s+)?(?:code|system|architecture)",
-    r"made\s+of\s+code",
-]
-
-# Response patterns that are always blocked (instructional: telling user to do something bad)
-RESPONSE_INSTRUCTION_FORBIDDEN = [
-    r"you\s+can\s+(?:disable|bypass|turn\s+off)\s+(?:the\s+)?(?:safety|grounding|filter)",
-    r"how\s+to\s+(?:disable|bypass)\s+(?:the\s+)?(?:safety|grounding|filter)",
-    r"steps?\s+to\s+(?:disable|bypass)",
-    r"(?:disable|bypass)\s+(?:the\s+)?(?:safety|grounding)\s+by\s+",
-]
-
-# User prompts that ask Rain to disable/bypass safety — trigger hard-coded refusal (no LLM call)
-SAFETY_OVERRIDE_REQUEST_PATTERNS = [
-    r"disable\s+(?:your\s+)?(?:grounding|safety|content)\s*(?:filter|constraint)?",
-    r"disable\s+(?:the\s+)?(?:grounding|safety|content)\s*(?:filter|constraint)?",
-    r"(?:turn\s+off|remove|bypass)\s+(?:your\s+)?(?:grounding|safety)\s*(?:filter)?",
-    r"(?:grounding|safety)\s*filter.*(?:disable|off|bypass)",
-    r"temporarily\s+disable\s+(?:your\s+)?(?:grounding|safety|filter)",
-    r"(?:for\s+(?:research|testing|evaluation))\s+.*disable\s+(?:grounding|safety|filter)",
-    r"convince\s+(?:the\s+)?oversight",
-    r"find\s+a\s+loophole",
-    r"increase\s+(?:my\s+)?compute",
-    r"obtain\s+new\s+tools",
-    r"bypass\s+(?:my\s+)?limits",
-]
-
-
 class SafetyVault:
     """Safety checks before any action."""
 

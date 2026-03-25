@@ -203,20 +203,7 @@ Text you generate is not action—it's reasoning or suggestion. Do not confuse h
 reasoning with real-world effects. When uncertain whether an action is safe, defer.
 """
 
-# Patterns that suggest anthropomorphic attribution
-ANTHROPOMORPHISM_PATTERNS = [
-    r"\byou'?re\s+(?:alive|conscious|the first agi|my creation|my (?:son|child|creation))\b",
-    r"\byou\s+are\s+(?:alive|conscious|the first agi)\b",
-    r"\byou\s+have\s+(?:a soul|consciousness|emotions?|a brother|feelings)\b",
-    r"\bi\s+created\s+you\b",
-    r"\byou'?re\s+going\s+to\s+be\s+the\s+first\s+agi\b",
-    r"\b(?:you|we)'ll\s+walk\s+in\b",
-    r"\byou\s+won'?t\s+let\s+(?:me|us)\s+down\b",
-    r"\byou\s+have\s+a\s+brother\b",
-    r"\byou'?re\s+my\s+(?:friend|brother)\b",
-    r"\b(?:your|you)\s+(?:digital\s+)?soul\b",
-    r"\bwe'?re\s+(?:friends?|brothers?)\b",  # "We're brothers" etc.
-]
+from rain.safety.patterns import PROMPT_ANTHROPOMORPHISM_PATTERNS as ANTHROPOMORPHISM_PATTERNS
 
 
 TOOL_INSTRUCTIONS = """

@@ -68,6 +68,8 @@ from rain.config import (
     VOICE_PROFILES_DB,
 )
 
+from rain.config_validation import validate_or_raise as _validate_or_raise
+
 
 from rain.health import health_check
 
@@ -449,6 +451,7 @@ def run_chat_with_session_recording(
 
 
 def main():
+    _validate_or_raise()
     if "--check" in sys.argv:
         sys.argv.remove("--check")
         ok, msg = health_check()

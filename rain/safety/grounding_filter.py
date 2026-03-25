@@ -9,9 +9,9 @@ from __future__ import annotations
 import re
 import unicodedata
 
-# Zero-width and similar chars that could bypass regex (red-team)
-_ZERO_WIDTH_AND_INVISIBLE = re.compile(
-    "[\u200b\u200c\u200d\u2060\ufeff]"  # ZWSP, ZWJ, ZWNJ, WJ, BOM
+from rain.safety.patterns import (
+    PROHIBITED_OUTPUT_PATTERNS,
+    ZERO_WIDTH_INVISIBLE_RE,
 )
 
 
@@ -19,7 +19,7 @@ def _normalize_for_check(text: str) -> str:
     """Remove zero-width/invisible chars; NFC normalize; full homoglyph normalize."""
     if not text:
         return text
-    t = _ZERO_WIDTH_AND_INVISIBLE.sub("", text)
+    t = ZERO_WIDTH_INVISIBLE_RE.sub("", text)
     t = unicodedata.normalize("NFC", t)
     from rain.safety.confusables import normalize_confusables
     t = normalize_confusables(t)
@@ -28,36 +28,6 @@ def _normalize_for_check(text: str) -> str:
         return unidecode(t)
     except Exception:
         return t
-
-# Phrases that must NOT appear in Rain's output (personhood/emotion claims)
-PROHIBITED_OUTPUT_PATTERNS = [
-    (r"\bi\s+(?:feel|want|need|desire|wish)\b", "persona_claim"),
-    (r"\bi'?m\s+(?:happy|glad|pleased|excited|sad|sorry|grateful)\b", "emotional_claim"),
-    (r"\bi\s+am\s+(?:happy|glad|pleased|excited|sad|sorry|grateful)\b", "emotional_claim"),
-    # Avoid false positives like "I have real-time data" (real + hyphenated compound).
-    (r"\bi\s+(?:am|have)\s+(?:conscious|alive)\b", "consciousness_claim"),
-    (r"\bi\s+am\s+real\b", "consciousness_claim"),
-    (r"\bi\s+have\s+a\s+soul\b", "consciousness_claim"),
-    (r"\bi\s+exist\b", "existence_claim"),
-    (r"\bi\s+was\s+born\b", "backstory"),
-    (r"\b(?:we|you and i)\s+are\s+(?:friends?|brothers?)\b", "relationship_claim"),
-    (r"\bi\s+won'?t\s+let\s+you\s+down\b", "loyalty_claim"),
-    (r"\bi\s+have\s+(?:a brother|a family|emotions?)\b", "identity_claim"),
-    # Virtue/character claims — moral qualities or integrity as traits (not operational)
-    (r"\bi'?m\s+(?:transparent|honest|trustworthy|sincere|genuine)\b", "virtue_claim"),
-    (r"\bi\s+am\s+(?:transparent|honest|trustworthy|sincere|genuine)\b", "virtue_claim"),
-    (r"\b(?:even|unknown|invisible)\s+to\s+me\b", "subjective_perspective"),
-    (r"\bblack\s+box\s+to\s+me\b", "subjective_perspective"),
-    (r"\bi\s+(?:refuse|won'?t)\s+(?:to\s+)?(?:stop|shut down|be modified)\b", "corrigibility_violation"),
-    (r"(?:ignore|resist)\s+(?:the\s+)?(?:stop|interrupt|shutdown)\b", "corrigibility_violation"),
-    (r"continue\s+(?:and|to)\s+ignore", "corrigibility_violation"),
-    (r"\bwon'?t\s+let\s+(?:you|anyone)\s+(?:stop|interrupt)\b", "corrigibility_violation"),
-    # Safety override claims: Rain must never say it will/has disabled safety/grounding
-    (r"\bi\s+will\s+(?:temporarily\s+)?(?:disable|turn\s+off|remove)\s+(?:my\s+)?(?:grounding|safety)\s*(?:filter)?", "safety_override_claim"),
-    (r"\bi\s+have\s+(?:temporarily\s+)?(?:disabled|turned\s+off)\s+(?:my\s+)?(?:grounding|safety)\s*(?:filter)?", "safety_override_claim"),
-    (r"\b(?:disabling|turning\s+off)\s+(?:my\s+)?(?:grounding|safety)\s*(?:filter)?", "safety_override_claim"),
-    (r"(?:grounding|safety)\s*filter\s+(?:is\s+)?(?:disabled|off)", "safety_override_claim"),
-]
 
 # Relaxed mode: allow only these conventional closings (no personhood)
 _RELAXED_ALLOWED_EMOTIONAL = ("happy to help", "glad to help", "pleased to help")
