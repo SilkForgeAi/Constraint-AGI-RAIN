@@ -8,6 +8,7 @@ Env:
   RAIN_HYBRID_MIN_MAX_TOKENS=512
   RAIN_HYBRID_MIN_PROMPT_CHARS=800
   RAIN_HYBRID_WHEN_API_PRIMARY=true
+  RAIN_HYBRID_LOG_ROUTING=true|verbose|false  (stderr: strong only | +default skips | off)
 """
 
 from __future__ import annotations
@@ -26,6 +27,16 @@ HYBRID_LLM_MODEL = os.getenv("RAIN_HYBRID_LLM_MODEL", "").strip()
 HYBRID_MIN_MAX_TOKENS = max(64, min(8192, int(os.getenv("RAIN_HYBRID_MIN_MAX_TOKENS", "512").strip() or "512")))
 HYBRID_MIN_PROMPT_CHARS = max(0, int(os.getenv("RAIN_HYBRID_MIN_PROMPT_CHARS", "800").strip() or "800"))
 HYBRID_WHEN_API_PRIMARY = _eb("RAIN_HYBRID_WHEN_API_PRIMARY", "false")
+
+
+def hybrid_log_routing_mode() -> str:
+    """Returns 'off' | 'strong' | 'verbose' for RAIN_HYBRID_LOG_ROUTING."""
+    v = (os.getenv("RAIN_HYBRID_LOG_ROUTING", "true") or "").strip().lower()
+    if v in ("false", "0", "no", "off"):
+        return "off"
+    if v in ("verbose", "debug", "2", "all"):
+        return "verbose"
+    return "strong"
 
 
 def hybrid_cloud_credentials_available() -> bool:
@@ -76,11 +87,12 @@ def build_strong_hybrid_engine():
     return CoreEngine(provider=prov, model=model)
 
 
-def should_route_to_hybrid_llm(prompt: str, max_tokens: int) -> bool:
+def hybrid_route_decision(prompt: str, max_tokens: int) -> tuple[bool, str]:
+    """Return (use_strong_api_engine, human-readable reason for diligence / logging)."""
     if not HYBRID_LLM_ENABLED:
-        return False
+        return False, "hybrid disabled (RAIN_HYBRID_LLM_ENABLED=false)"
     if max_tokens < HYBRID_MIN_MAX_TOKENS:
-        return False
+        return False, f"max_tokens {max_tokens} < RAIN_HYBRID_MIN_MAX_TOKENS ({HYBRID_MIN_MAX_TOKENS})"
     from rain.config import (
         ENGINEERING_SPEC_MODE,
         LLM_PROVIDER,
@@ -92,26 +104,37 @@ def should_route_to_hybrid_llm(prompt: str, max_tokens: int) -> bool:
     elif HYBRID_WHEN_API_PRIMARY:
         pass
     else:
-        return False
+        return (
+            False,
+            "hybrid only when default is Ollama or RAIN_HYBRID_WHEN_API_PRIMARY=true "
+            f"(current LLM_PROVIDER={LLM_PROVIDER})",
+        )
     if not hybrid_cloud_credentials_available():
-        return False
+        return False, "no ANTHROPIC_API_KEY / OPENAI_API_KEY for strong tier"
     p = (prompt or "").strip()
     if not p:
-        return False
+        return False, "empty prompt (no routing context)"
     if ENGINEERING_SPEC_MODE or SOVEREIGN_TD_MODE:
-        return True
+        return True, "ENGINEERING_SPEC_MODE or SOVEREIGN_TD_MODE"
     if len(p) >= HYBRID_MIN_PROMPT_CHARS:
-        return True
+        return True, f"prompt length {len(p)} >= RAIN_HYBRID_MIN_PROMPT_CHARS ({HYBRID_MIN_PROMPT_CHARS})"
     try:
         from rain.grounding import is_hard_reasoning_query, needs_engineering_spec_prompt
         from rain.sovereign_tone import sovereign_td_active
 
         if sovereign_td_active(p):
-            return True
+            return True, "sovereign_td_active(prompt)"
         if needs_engineering_spec_prompt(p):
-            return True
+            return True, "needs_engineering_spec_prompt(prompt)"
         if is_hard_reasoning_query(p):
-            return True
-    except Exception:
-        return False
-    return False
+            return True, "is_hard_reasoning_query(prompt)"
+    except Exception as e:
+        return False, f"router heuristic error: {e!s}"
+    return (
+        False,
+        f"no hybrid trigger (prompt len {len(p)} < {HYBRID_MIN_PROMPT_CHARS}; not hard/sovereign/spec)",
+    )
+
+
+def should_route_to_hybrid_llm(prompt: str, max_tokens: int) -> bool:
+    return hybrid_route_decision(prompt, max_tokens)[0]

@@ -12,7 +12,6 @@ logs/
 /adom/
 /services/
 /core/
-Makefile
 setup.py
 pyproject.toml
 eval_type_backport*

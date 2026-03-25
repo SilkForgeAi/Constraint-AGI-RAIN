@@ -395,35 +395,6 @@ def build_strong_hybrid_engine():
 
 def should_route_to_hybrid_llm(prompt: str, max_tokens: int) -> bool:
     """True when this completion should use the strong (API) engine."""
-    if not HYBRID_LLM_ENABLED:
-        return False
-    if max_tokens < HYBRID_MIN_MAX_TOKENS:
-        return False
-    if LLM_PROVIDER == "ollama":
-        pass
-    elif HYBRID_WHEN_API_PRIMARY:
-        pass
-    else:
-        return False
-    if not hybrid_cloud_credentials_available():
-        return False
-    p = (prompt or "").strip()
-    if not p:
-        return False
-    try:
-        from rain.sovereign_tone import sovereign_td_active
-        from rain.grounding import needs_engineering_spec_prompt, is_hard_reasoning_query
+    from rain.hybrid_config import should_route_to_hybrid_llm as _impl
 
-        if sovereign_td_active(p):
-            return True
-        if needs_engineering_spec_prompt(p):
-            return True
-        if ENGINEERING_SPEC_MODE or SOVEREIGN_TD_MODE:
-            return True
-        if len(p) >= HYBRID_MIN_PROMPT_CHARS:
-            return True
-        if is_hard_reasoning_query(p):
-            return True
-    except Exception:
-        return False
-    return False
+    return _impl(prompt, max_tokens)

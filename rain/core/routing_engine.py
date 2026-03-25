@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import sys
 from typing import TYPE_CHECKING, Any
 
 from rain.core.engine import CoreEngine
@@ -28,16 +29,36 @@ class RoutingCoreEngine:
 
     def _pick(self, max_tokens: int) -> CoreEngine:
         from rain.core.routing_context import get_routing_prompt
-        from rain.hybrid_config import should_route_to_hybrid_llm
+        from rain.hybrid_config import hybrid_log_routing_mode, hybrid_route_decision
 
         prompt = self._routing_prompt or get_routing_prompt() or ""
-        if self._strong and should_route_to_hybrid_llm(prompt, max_tokens):
-            logger.debug(
-                "hybrid_llm: routing to strong model provider=%s model=%s",
+        use_strong, reason = hybrid_route_decision(prompt, max_tokens)
+        mode = hybrid_log_routing_mode()
+
+        if self._strong and use_strong:
+            if mode != "off":
+                print(
+                    f"[Rain hybrid] route=STRONG provider={self._strong.provider} "
+                    f"model={self._strong.model} | default={self._default.provider}/{self._default.model} "
+                    f"| reason={reason}",
+                    file=sys.stderr,
+                    flush=True,
+                )
+            logger.info(
+                "hybrid_llm: strong provider=%s model=%s reason=%s",
                 self._strong.provider,
                 self._strong.model,
+                reason,
             )
             return self._strong
+
+        if mode == "verbose" and self._strong:
+            print(
+                f"[Rain hybrid] route=default provider={self._default.provider} "
+                f"model={self._default.model} | reason={reason}",
+                file=sys.stderr,
+                flush=True,
+            )
         return self._default
 
     @property

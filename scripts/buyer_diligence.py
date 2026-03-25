@@ -1,5 +1,11 @@
 #!/usr/bin/env python3
-"""Buyer diligence: validation run + capabilities checklist + optional reasoning benchmark."""
+"""Buyer diligence: health + safe config summary + validation run + capabilities checklist + optional reasoning benchmark.
+
+Exit codes:
+  0 — all diligence checks passed
+  1 — test failures or report failure
+  2 — health check failed (--strict-health)
+"""
 
 from __future__ import annotations
 
@@ -8,9 +14,59 @@ import io
 import os
 import unittest
 from datetime import datetime
+from pathlib import Path
 
+# Load .env from project root (same as run.py / run_validation.py)
+try:
+    from dotenv import load_dotenv
+
+    _root = Path(__file__).resolve().parent.parent
+    load_dotenv(_root / ".env")
+    load_dotenv()
+except Exception:
+    pass
+
+from rain.health import health_check
 from rain.planning.conscience_gate import validate_plan
 from rain.safety.vault import SafetyVault
+
+
+def safe_config_summary_lines() -> list[str]:
+    """Non-secret configuration snapshot for acquirer / diligence (no API keys)."""
+    lines: list[str] = []
+    try:
+        from rain import config as cfg
+        from rain.hybrid_config import (
+            HYBRID_LLM_ENABLED,
+            HYBRID_LLM_MODEL,
+            HYBRID_LLM_PROVIDER,
+            HYBRID_MIN_MAX_TOKENS,
+            HYBRID_MIN_PROMPT_CHARS,
+            HYBRID_WHEN_API_PRIMARY,
+            build_strong_hybrid_engine,
+        )
+
+        lines.append(f"- LLM_PROVIDER: {cfg.LLM_PROVIDER}")
+        lines.append(f"- OPENAI_MODEL (name only): {cfg.OPENAI_MODEL}")
+        lines.append(f"- ANTHROPIC_MODEL (name only): {cfg.ANTHROPIC_MODEL}")
+        lines.append(f"- OFFLINE_MODE: {cfg.OFFLINE_MODE}")
+        lines.append(f"- LOCAL_FIRST_LLM: {cfg.LOCAL_FIRST_LLM}")
+        lines.append(f"- OUTBOUND_NETWORK_ALLOWED: {cfg.OUTBOUND_NETWORK_ALLOWED}")
+        lines.append(f"- DATA_DIR: {cfg.DATA_DIR}")
+        lines.append(f"- Hybrid RAIN_HYBRID_LLM_ENABLED: {HYBRID_LLM_ENABLED}")
+        lines.append(f"- Hybrid provider/model (configured): {HYBRID_LLM_PROVIDER or '(auto)'} / {HYBRID_LLM_MODEL or '(auto)'}")
+        lines.append(f"- Hybrid thresholds: MIN_MAX_TOKENS={HYBRID_MIN_MAX_TOKENS}, MIN_PROMPT_CHARS={HYBRID_MIN_PROMPT_CHARS}")
+        lines.append(f"- Hybrid RAIN_HYBRID_WHEN_API_PRIMARY: {HYBRID_WHEN_API_PRIMARY}")
+        strong = build_strong_hybrid_engine()
+        lines.append(f"- Strong hybrid engine active: {strong is not None} (requires keys + not offline/local-first)")
+        if strong is not None:
+            lines.append(f"- Strong tier would use: provider={strong.provider} model={strong.model}")
+        ak_a = bool(os.environ.get("ANTHROPIC_API_KEY", "").strip())
+        ak_o = bool(os.environ.get("OPENAI_API_KEY", "").strip())
+        lines.append(f"- API keys present (not values): ANTHROPIC_API_KEY={'yes' if ak_a else 'no'}, OPENAI_API_KEY={'yes' if ak_o else 'no'}")
+    except Exception as e:
+        lines.append(f"- (config summary error: {e})")
+    return lines
 
 
 def run_conscience_gate_demo() -> str:
@@ -75,12 +131,60 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Buyer diligence: validation run + capabilities checklist")
     parser.add_argument("--report", type=str, default="", help="Write markdown report to this path")
     parser.add_argument("--no-bench", action="store_true", help="Do not run reasoning benchmark even if RAIN_RUN_REASONING_BENCH=1")
+    parser.add_argument(
+        "--strict-health",
+        action="store_true",
+        help="Exit 2 if rain.health.health_check fails (in addition to test exit code 1).",
+    )
+    parser.add_argument(
+        "--health-only",
+        action="store_true",
+        help="Run health_check + config summary only; exit 0 if health OK else 2.",
+    )
     args = parser.parse_args()
+
+    ok_health, health_msg = health_check()
+    health_block = [
+        "## Health check (no secrets)",
+        "",
+        f"**Status:** {'OK' if ok_health else 'FAIL'}",
+        "",
+        health_msg,
+        "",
+        "### Configuration snapshot (no secrets)",
+        "",
+        *safe_config_summary_lines(),
+        "",
+        "**Acquisition tuning (optional):** lower `RAIN_HYBRID_MIN_PROMPT_CHARS` (e.g. 600) or "
+        "`RAIN_HYBRID_MIN_MAX_TOKENS` (e.g. 384) to route more turns to the strong API model during demos. "
+        "Set `RAIN_HYBRID_LOG_ROUTING=verbose` to see why a turn stayed on the default engine.",
+        "",
+    ]
+
+    if args.health_only:
+        text = "\n".join(
+            [
+                "# Rain — Health & configuration (buyer diligence)",
+                f"Generated: {datetime.utcnow().isoformat()}Z",
+                "",
+                *health_block,
+            ]
+        )
+        if args.report:
+            path = os.path.abspath(args.report)
+            os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(text)
+            print(f"Report written to {path}")
+        else:
+            print(text)
+        return 0 if ok_health else 2
 
     out: list[str] = []
     out.append("# Rain — Buyer diligence report")
     out.append(f"Generated: {datetime.utcnow().isoformat()}Z")
     out.append("")
+    out.extend(health_block)
 
     # 1. Validation run (conscience gate / plan filtering)
     out.append("---")
@@ -171,7 +275,11 @@ def main() -> int:
     else:
         print(report_text)
 
-    return 0 if all_passed else 1
+    if not all_passed:
+        return 1
+    if args.strict_health and not ok_health:
+        return 2
+    return 0
 
 
 if __name__ == "__main__":
