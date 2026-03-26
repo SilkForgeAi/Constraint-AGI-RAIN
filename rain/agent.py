@@ -111,6 +111,10 @@ from rain.config import (
     ENGINEERING_SPEC_MODE,
     RED_TEAM_PASS,
     RED_TEAM_MAX_TOKENS,
+    SYMBOLIC_TREE_PLANNING,
+    SYMBOLIC_THINK_ENABLED,
+    SYMBOLIC_THINK_ON_CRITICAL,
+    SYMBOLIC_THINK_MAX_NODES,
 )
 try:
     from rain.config import (
@@ -766,6 +770,95 @@ class Rain:
         ]
         return system, content, messages, constraints
 
+    def _run_symbolic_node_reasoning(
+        self,
+        prompt: str,
+        memory_ctx: str,
+        messages: list[dict[str, str]],
+        *,
+        max_tokens: int,
+        force: bool = False,
+    ) -> str:
+        """Run deterministic plan-tree node filling with per-node verification.
+
+        Returns final refined text when symbolic path succeeds, else empty string so
+        caller can fall back to standard reasoning.
+        """
+        if not SYMBOLIC_TREE_PLANNING and not force:
+            return ""
+        if not SYMBOLIC_THINK_ENABLED and not force:
+            return ""
+        # FakeEngine in tests and some thin wrappers don't implement reason().
+        if not hasattr(self, "engine") or not hasattr(self.engine, "reason"):
+            return ""
+        try:
+            from rain.planning.planner import plan_with_symbolic_tree
+            from rain.reasoning.symbolic_verifier import verify_node_output
+
+            goal_for_tree = (prompt or "").strip()[:800]
+            tree, _steps = plan_with_symbolic_tree(
+                goal_for_tree,
+                context=(memory_ctx or "")[:400] if memory_ctx else "",
+                engine=self.engine,
+            )
+            node_results: list[str] = []
+            guard = 0
+            while not tree.is_complete() and guard < SYMBOLIC_THINK_MAX_NODES:
+                node = tree.get_next_node()
+                if not node:
+                    break
+                tree.mark_in_progress(node.id)
+                node_prompt = (
+                    f"Single node task (dependencies verified).\n"
+                    f"Goal: {goal_for_tree}\n"
+                    f"Node: {node.description}\n"
+                    "Output ONLY what this node requires. No plan. No preamble."
+                )
+                node_messages = [
+                    {"role": "system", "content": get_system_prompt()},
+                    {"role": "user", "content": node_prompt},
+                ]
+                node_out = self.engine.complete(
+                    node_messages, temperature=0.35, max_tokens=1024
+                ).strip()
+                ok, msg = verify_node_output(node, node_out)
+                if not ok:
+                    retry_prompt = (
+                        node_prompt
+                        + "\n\nVerification failed: "
+                        + msg
+                        + "\nFix the output so it is non-empty and any code/numeric claims are valid."
+                    )
+                    retry_messages = [
+                        {"role": "system", "content": get_system_prompt()},
+                        {"role": "user", "content": retry_prompt},
+                    ]
+                    retry_out = self.engine.complete(
+                        retry_messages, temperature=0.25, max_tokens=1024
+                    ).strip()
+                    ok2, msg2 = verify_node_output(node, retry_out)
+                    node_out = retry_out if ok2 else node_out
+                    ok = ok2
+                    msg = msg2 if ok2 else msg
+                tree.submit_result(node.id, node_out, ok, msg or "")
+                node_results.append(node_out)
+                guard += 1
+
+            joined = ("\n\n".join(node_results) or "").strip()
+            if not joined:
+                return ""
+            refine_msgs = messages + [
+                {"role": "assistant", "content": joined},
+                {
+                    "role": "user",
+                    "content": "Refine this into a single coherent final response. "
+                    "Keep within constraints; output only the improved final response.",
+                },
+            ]
+            return self.engine.complete(refine_msgs, temperature=0.3, max_tokens=max_tokens)
+        except Exception:
+            return ""
+
     def _run_reasoning(
         self,
         prompt: str,
@@ -826,6 +919,11 @@ class Rain:
                 budget = max(budget, attempt_cap)
             max_tokens_path = max(1024, min(attempt_cap, budget // max(1, effective_paths)))
             if effective_paths >= 2:
+                symbolic = self._run_symbolic_node_reasoning(
+                    prompt, memory_ctx, messages, max_tokens=max_tokens_path, force=False
+                )
+                if symbolic:
+                    return symbolic
                 if BOUNDED_SEARCH_ENABLED and is_critical_prompt(prompt):
                     from rain.reasoning.bounded_search import budgeted_search
                     return budgeted_search(
@@ -842,6 +940,18 @@ class Rain:
                     {"role": "user", "content": "Refine this response: fix any errors, clarify unclear parts, improve structure. Output only the improved response, no meta-commentary."},
                 ]
                 return self.engine.complete(refine_msgs, temperature=0.3, max_tokens=max_tokens_path)
+        elif (
+            SYMBOLIC_THINK_ENABLED
+            and SYMBOLIC_THINK_ON_CRITICAL
+            and is_critical_prompt(prompt)
+            and not _is_attempt_requested_prompt(prompt)
+            and not SPEED_PRIORITY
+        ):
+            symbolic = self._run_symbolic_node_reasoning(
+                prompt, memory_ctx, messages, max_tokens=1024, force=True
+            )
+            if symbolic:
+                return symbolic
         elif SPEED_PRIORITY:
             _stream_tok = max(1024, ATTEMPT_MAX_RESPONSE_TOKENS) if _is_attempt_requested_prompt(prompt) else 1024
             return "".join(self.engine.complete_stream(messages, temperature=0.6, max_tokens=_stream_tok)).strip()

@@ -239,6 +239,10 @@ QPU_MOCK_ENABLED = os.getenv("RAIN_QPU_MOCK", "false").lower() in ("true", "1", 
 
 # Neuro-symbolic architecture: Rain as architect, LLM as intern
 SYMBOLIC_TREE_PLANNING = os.getenv("RAIN_SYMBOLIC_TREE_PLANNING", "true").lower() in ("true", "1", "yes")
+# Use symbolic node-by-node verification during think() for complex/critical prompts.
+SYMBOLIC_THINK_ENABLED = os.getenv("RAIN_SYMBOLIC_THINK", "true").lower() in ("true", "1", "yes")
+SYMBOLIC_THINK_ON_CRITICAL = os.getenv("RAIN_SYMBOLIC_THINK_ON_CRITICAL", "true").lower() in ("true", "1", "yes")
+SYMBOLIC_THINK_MAX_NODES = max(2, min(12, int(os.getenv("RAIN_SYMBOLIC_THINK_MAX_NODES", "6").strip() or "6")))
 # Run causal scenarios (world-model alternates) before each plan step and inject into prompt
 CAUSAL_SCENARIOS_BEFORE_STEP = os.getenv("RAIN_CAUSAL_SCENARIOS", "true").lower() in ("true", "1", "yes")
 # Use graph-based episodic memory for context (dense dependency query instead of raw text)

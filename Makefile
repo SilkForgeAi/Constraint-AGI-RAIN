@@ -5,7 +5,7 @@
 
 # Fast tests only (no LLM). Includes namespace isolation (critical for safety).
 test-fast:
-	python -m unittest tests.test_rain tests.test_prime_validation tests.test_phase3 tests.test_orchestration tests.test_drift_detection tests.test_calibration tests.test_redteam tests.test_red_team_flaws tests.test_adversarial_autonomy tests.test_lessons tests.test_namespace_isolation tests.test_namespace_symbolic tests.test_rag tests.test_read_file -v
+	python -m unittest tests.test_rain tests.test_prime_validation tests.test_phase3 tests.test_orchestration tests.test_constraint_tracker tests.test_drift_detection tests.test_calibration tests.test_redteam tests.test_red_team_flaws tests.test_adversarial_autonomy tests.test_lessons tests.test_namespace_isolation tests.test_namespace_symbolic tests.test_rag tests.test_read_file -v
 
 # Full red-team / safety suite (no LLM): same as test-fast, explicit name for audits.
 test-redteam:
