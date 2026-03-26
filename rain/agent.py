@@ -383,7 +383,10 @@ class Rain:
             def remember_fact(subject: str, predicate: str, obj: str = "") -> str:
                 from rain.knowledge.facts import get_fact_store
 
-                get_fact_store(DATA_DIR).add_fact(subject, predicate, obj, source="tool")
+                ns = getattr(self, "_current_memory_namespace", None)
+                if not ns:
+                    return "Not stored (no active memory namespace)."
+                get_fact_store(DATA_DIR).add_fact(subject, predicate, obj, namespace=ns, source="tool")
                 return "Structured fact recorded."
 
             self.tools.register(
@@ -1453,6 +1456,7 @@ class Rain:
                     use_tools=use_tools,
                     use_memory=use_memory,
                     safety_allowed=True,
+                    memory_namespace=self._current_memory_namespace,
                 )
             except Exception:
                 self._turn_decision = None

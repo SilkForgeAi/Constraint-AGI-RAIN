@@ -37,6 +37,7 @@ def compute_turn_decision(
     use_tools: bool,
     use_memory: bool,
     safety_allowed: bool,
+    memory_namespace: str | None = None,
 ) -> TurnDecision:
     """Single place for epistemic mode + session explore + KR injection hints."""
     from rain import config as cfg
@@ -71,12 +72,13 @@ def compute_turn_decision(
         reasons.append("memory_top_k:+2_on_explore")
 
     kfrag = ""
-    if getattr(cfg, "KNOWLEDGE_FACTS_IN_PROMPT", True):
+    # P3: facts injection is namespaced; only inject when we have an active memory namespace.
+    if use_memory and memory_namespace and getattr(cfg, "KNOWLEDGE_FACTS_IN_PROMPT", True):
         try:
             from rain.knowledge.facts import get_fact_store
 
             store = get_fact_store(cfg.DATA_DIR)
-            kfrag = store.facts_for_prompt(prompt, limit=10)
+            kfrag = store.facts_for_prompt(prompt, limit=10, namespace=memory_namespace)
             if kfrag:
                 reasons.append("knowledge_facts:injected")
         except Exception:

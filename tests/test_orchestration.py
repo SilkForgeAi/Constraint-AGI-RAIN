@@ -32,10 +32,18 @@ class TestStructuredFacts(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             p = Path(d) / "kf.jsonl"
             s = StructuredFactStore(p)
-            s.add_fact("Alice", "works_at", "Acme", source="test")
-            out = s.facts_for_prompt("Where does Alice work", limit=5)
+            s.add_fact("Alice", "works_at", "Acme", namespace="chat", source="test")
+            out = s.facts_for_prompt("Where does Alice work", limit=5, namespace="chat")
             self.assertIn("Alice", out)
             self.assertIn("Acme", out)
+
+    def test_namespace_isolation(self) -> None:
+        with tempfile.TemporaryDirectory() as d:
+            p = Path(d) / "kf.jsonl"
+            s = StructuredFactStore(p)
+            s.add_fact("Alice", "works_at", "Acme", namespace="chat", source="test")
+            out = s.facts_for_prompt("Where does Alice work", limit=5, namespace="autonomy")
+            self.assertEqual(out, "")
 
 
 class TestDecisionLayer(unittest.TestCase):
@@ -44,7 +52,12 @@ class TestDecisionLayer(unittest.TestCase):
         agent._explore_budget = SessionExploreBudget()
         agent.memory = MagicMock()
         d = compute_turn_decision(
-            agent, "Explain step by step how to prove this inequality.", use_tools=False, use_memory=True, safety_allowed=True
+            agent,
+            "Explain step by step how to prove this inequality.",
+            use_tools=False,
+            use_memory=True,
+            safety_allowed=True,
+            memory_namespace="chat",
         )
         self.assertTrue(len(d.gi.mode.value) > 1)
         addon = decision_system_addon(d)

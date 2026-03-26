@@ -30,7 +30,19 @@ Rules:
 - Banned in output: "I would", "it is likely", "simplified", "Assumptions:", "Limitations:" as filler, tutorial tone, Path A/Path B narration, Y/N checklists.
 - Do not describe your review process. No meta. No preambles."""
 
-    cons_lines = "\n".join(f"- {c}" for c in (constraints or [])[:24]) or "- (none explicitly parsed)"
+    def _disp(x: str) -> str:
+        if not x:
+            return x
+        if ":" in x:
+            tag, rest = x.split(":", 1)
+            if tag.strip().upper() in ("MUST", "FORBID", "LIMIT"):
+                return rest.strip()
+        return x
+
+    cons_lines = (
+        "\n".join(f"- {_disp(c)}" for c in (constraints or [])[:24])
+        or "- (none explicitly parsed)"
+    )
     user = (
         f"## User request (excerpt)\n{user_prompt[:2000]}\n\n"
         f"## Parsed constraints\n{cons_lines}\n\n"

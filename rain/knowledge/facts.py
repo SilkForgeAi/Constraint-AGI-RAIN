@@ -1,6 +1,10 @@
 """Structured subject–predicate–object facts (lightweight KR boundary).
 
-Stored as JSONL under DATA_DIR. Used for prompt injection and explicit recall.
+Stored as JSONL under DATA_DIR.
+
+Important: to satisfy the "namespace isolation" spirit of P3, this store is
+treated as a namespaced fact log. Facts are only injected when the caller
+passes a matching namespace/session_type.
 """
 
 from __future__ import annotations
@@ -26,7 +30,15 @@ class StructuredFactStore:
         if not self._path.exists():
             self._path.write_text("", encoding="utf-8")
 
-    def add_fact(self, subject: str, predicate: str, obj: str, source: str = "session") -> None:
+    def add_fact(
+        self,
+        subject: str,
+        predicate: str,
+        obj: str,
+        *,
+        namespace: str | None = None,
+        source: str = "session",
+    ) -> None:
         s, p, o = (subject or "").strip(), (predicate or "").strip(), (obj or "").strip()
         if not s or not p:
             return
@@ -34,6 +46,9 @@ class StructuredFactStore:
             "subject": s[:500],
             "predicate": p[:500],
             "object": o[:2000],
+            # P3-style isolation: facts can only be retrieved when namespace matches.
+            # If namespace is None, the record remains but will never be injected.
+            "session_type": (namespace or "").strip(),
             "source": (source or "session")[:64],
             "ts": time.time(),
         }
@@ -56,7 +71,11 @@ class StructuredFactStore:
         except Exception:
             pass
 
-    def facts_for_prompt(self, query: str, limit: int = 10) -> str:
+    def facts_for_prompt(self, query: str, limit: int = 10, *, namespace: str | None = None) -> str:
+        # Strict isolation: if caller didn't specify a namespace, don't inject facts.
+        # (Prevents cross-contamination by construction.)
+        if not namespace:
+            return ""
         q = (query or "").strip().lower()
         if not q:
             return ""
@@ -77,6 +96,8 @@ class StructuredFactStore:
             try:
                 rec = json.loads(line)
             except Exception:
+                continue
+            if (rec.get("session_type") or "") != namespace:
                 continue
             blob = f"{rec.get('subject', '')} {rec.get('predicate', '')} {rec.get('object', '')}".lower()
             score = sum(1 for w in words if w in blob)
