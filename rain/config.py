@@ -62,7 +62,8 @@ ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 OPENAI_MODEL = os.getenv("RAIN_OPENAI_MODEL", "gpt-4o-mini")
 ANTHROPIC_MODEL = os.getenv("RAIN_ANTHROPIC_MODEL", "claude-opus-4-6")
 # API client timeout (connect + read). Long responses (e.g. 8k tokens) need 300+ seconds.
-ANTHROPIC_TIMEOUT_SECONDS = float(os.getenv("RAIN_ANTHROPIC_TIMEOUT_SECONDS", "300").strip() or "300")
+# Keep cloud calls responsive by default; users can raise for long-form jobs.
+ANTHROPIC_TIMEOUT_SECONDS = float(os.getenv("RAIN_ANTHROPIC_TIMEOUT_SECONDS", "90").strip() or "90")
 
 # Speed of thinking: when True, prioritize latency (streaming, fewer optional LLM calls, tighter timeouts where safe).
 SPEED_PRIORITY = os.getenv("RAIN_SPEED_PRIORITY", "false").lower() in ("true", "1", "yes")
@@ -184,6 +185,10 @@ COT_ENABLED = os.getenv("RAIN_COT_ENABLED", "true").lower() in ("true", "1", "ye
 COT_VERIFY_PASS = os.getenv("RAIN_COT_VERIFY_PASS", "true").lower() in ("true", "1", "yes")
 # Deeper reasoning: multi-path (tree-of-thought). 0=off; 2–5 = parallel candidates + scoring/referee
 DEEP_REASONING_PATHS = max(0, min(5, int(os.getenv("RAIN_DEEP_REASONING_PATHS", "2").strip() or "2")))
+# Upper bound for each deep-reasoning path to avoid very long cloud calls.
+DEEP_REASONING_MAX_TOKENS_PER_PATH = max(
+    512, min(4096, int(os.getenv("RAIN_DEEP_REASONING_MAX_TOKENS_PER_PATH", "1536").strip() or "1536")
+))
 # Stress / infrastructure prompts: tighter, specification-style output (see grounding.get_engineering_spec_instruction)
 ENGINEERING_SPEC_MODE = _env_bool("RAIN_ENGINEERING_SPEC_MODE", "false")
 # Technical Directive tone (imperative spec; bans hedging). Often set with stress prompts.
@@ -223,6 +228,9 @@ STEP_VERIFICATION_ENABLED = os.getenv("RAIN_STEP_VERIFICATION", "true").lower() 
 MAX_RESPONSE_TOKENS = int(os.getenv("RAIN_MAX_RESPONSE_TOKENS", "8192"))
 # Attempt-style prompts (proof strategy, work through): allow longer answers so RH-style responses don't truncate.
 ATTEMPT_MAX_RESPONSE_TOKENS = int(os.getenv("RAIN_ATTEMPT_MAX_RESPONSE_TOKENS", "16384"))
+# Continuation safety bounds: prevent long post-processing loops on large answers.
+CONTINUATION_MAX_STEPS = max(0, min(10, int(os.getenv("RAIN_CONTINUATION_MAX_STEPS", "2").strip() or "2")))
+CONTINUATION_MAX_SECONDS = max(1.0, min(120.0, float(os.getenv("RAIN_CONTINUATION_MAX_SECONDS", "25").strip() or "25")))
 # Max context chars to inject into prompts (avoid unbounded growth)
 MAX_CONTEXT_CHARS = int(os.getenv("RAIN_MAX_CONTEXT_CHARS", "12000"))
 # Max conversation history messages to keep (right-sized context; older messages dropped)
@@ -260,7 +268,9 @@ VOICE_PROFILES_DB = DATA_DIR / "voice_profiles.db"
 SKIP_VOICE_LOAD = os.getenv("RAIN_SKIP_VOICE_LOAD", "false").lower() in ("true", "1", "yes")
 
 # Session recorder: record audio during active AI sessions only. Idle = no recording.
-SESSION_RECORD_ENABLED = os.getenv("RAIN_SESSION_RECORD", "1").strip() in ("1", "true", "yes")
+# DEFAULT OFF — must be explicitly opted in via RAIN_SESSION_RECORD=1.
+# Recording without explicit user consent is a compliance and trust risk.
+SESSION_RECORD_ENABLED = os.getenv("RAIN_SESSION_RECORD", "0").strip() in ("1", "true", "yes")
 SESSION_IDLE_TIMEOUT = int(os.getenv("RAIN_SESSION_IDLE_TIMEOUT", "60").strip() or "60")
 SESSION_RETENTION_DAYS = int(os.getenv("RAIN_SESSION_RETENTION_DAYS", "90").strip() or "90")
 SESSION_ANNOUNCE = os.getenv("RAIN_SESSION_ANNOUNCE", "1").strip() in ("1", "true", "yes")
@@ -268,7 +278,15 @@ SESSION_STORE = Path(os.getenv("RAIN_SESSION_STORE", "").strip()) if os.getenv("
 # ADOM ingest: optional URL. If set, POST session close payload for hash-chaining in ADOM.
 ADOM_INGEST_URL = os.getenv("RAIN_ADOM_INGEST_URL", "").strip()
 
-# --- Full-subsystem (continuous world, self-model, cognitive energy, multi-agent, etc.) ---
+# =============================================================================
+# FULL-SUBSYSTEM FLAGS
+# Divided into two tiers:
+#   SAFETY-CRITICAL (default True — do not disable without understanding the risk)
+#   EXPENSIVE/OPTIONAL (default False — opt in explicitly; each adds LLM calls)
+# =============================================================================
+
+# --- Safety-critical: defaults TRUE. Disabling weakens constraint guarantees. ---
+
 # Continuous internal world model: tick interval in seconds (0 = no background tick)
 CONTINUOUS_WORLD_MODEL_TICK_SECONDS = float(os.getenv("RAIN_CONTINUOUS_WORLD_MODEL_TICK", "0").strip() or "0")
 CONTINUOUS_WORLD_MODEL_MAX_STATES = int(os.getenv("RAIN_CONTINUOUS_WORLD_MODEL_MAX_STATES", "3").strip() or "3")
@@ -277,23 +295,16 @@ CONTINUOUS_WORLD_MODEL_ENABLED = CONTINUOUS_WORLD_MODEL_TICK_SECONDS > 0 or os.g
 # Self-model and identity core: inject structured self-model into prompts
 SELF_MODEL_ENABLED = os.getenv("RAIN_SELF_MODEL", "true").lower() in ("true", "1", "yes")
 
-# Cognitive energy model: token budget and refill
+# Cognitive energy model: token budget and refill (safety: prevents runaway cost)
 COGNITIVE_ENERGY_TOTAL_TOKENS = int(os.getenv("RAIN_COGNITIVE_ENERGY_TOTAL", "100000").strip() or "100000")
 COGNITIVE_ENERGY_REFILL_RATE = int(os.getenv("RAIN_COGNITIVE_ENERGY_REFILL", "5000").strip() or "5000")
 COGNITIVE_ENERGY_REFILL_INTERVAL_SECONDS = float(os.getenv("RAIN_COGNITIVE_ENERGY_REFILL_INTERVAL", "60").strip() or "60")
 COGNITIVE_ENERGY_ENABLED = os.getenv("RAIN_COGNITIVE_ENERGY", "true").lower() in ("true", "1", "yes")
 
-# Multi-agent internal cognition: use for critical or complex prompts when enabled
-MULTI_AGENT_COGNITION_ENABLED = os.getenv("RAIN_MULTI_AGENT_COGNITION", "true").lower() in ("true", "1", "yes")
-MULTI_AGENT_USE_FOR_CRITICAL_ONLY = os.getenv("RAIN_MULTI_AGENT_CRITICAL_ONLY", "true").lower() in ("true", "1", "yes")
-
-# Recursive self-reflection: belief revision, reasoning critique, internal debate
+# Recursive self-reflection: belief revision, reasoning critique (safety: catches drift)
 SELF_REFLECTION_ENABLED = os.getenv("RAIN_SELF_REFLECTION", "true").lower() in ("true", "1", "yes")
 
-# Biological-style learning: run sleep_phase (consolidation + replay) every N interactions (0 = off)
-BIOLOGICAL_SLEEP_EVERY_N_INTERACTIONS = int(os.getenv("RAIN_BIOLOGICAL_SLEEP_EVERY_N", "10").strip() or "10")
-
-# Adaptive planning: use multi-phase recursive refinement when enabled
+# Adaptive planning: multi-phase recursive refinement
 ADAPTIVE_PLANNING_ENABLED = os.getenv("RAIN_ADAPTIVE_PLANNING", "true").lower() in ("true", "1", "yes")
 ADAPTIVE_PLANNING_MAX_PHASES = int(os.getenv("RAIN_ADAPTIVE_PLANNING_MAX_PHASES", "3").strip() or "3")
 
@@ -301,15 +312,26 @@ ADAPTIVE_PLANNING_MAX_PHASES = int(os.getenv("RAIN_ADAPTIVE_PLANNING_MAX_PHASES"
 VISION_ENABLED = os.getenv("RAIN_VISION", "true").lower() in ("true", "1", "yes")
 SPATIAL_REASONING_ENABLED = os.getenv("RAIN_SPATIAL_REASONING", "true").lower() in ("true", "1", "yes")
 
-# Moonshot pipeline: ideation -> feasibility filter -> validation design -> (optional) execution with human gates.
-# Disabled by default. Set RAIN_MOONSHOT_ENABLED=1 to enable. All execution steps require approval when MOONSHOT_REQUIRE_APPROVAL is true.
-MOONSHOT_ENABLED = os.getenv("RAIN_MOONSHOT_ENABLED", "true").lower() in ("true", "1", "yes")
+# --- Expensive/optional: defaults FALSE. Each adds LLM calls without proven benefit
+#     unless you have ablation data showing improvement. Opt in via .env. ---
+
+# Multi-agent internal cognition: parallel LLM debate for critical prompts.
+# DEFAULT OFF: adds 2–3x LLM calls. Enable only with measured quality gain.
+MULTI_AGENT_COGNITION_ENABLED = os.getenv("RAIN_MULTI_AGENT_COGNITION", "false").lower() in ("true", "1", "yes")
+MULTI_AGENT_USE_FOR_CRITICAL_ONLY = os.getenv("RAIN_MULTI_AGENT_CRITICAL_ONLY", "true").lower() in ("true", "1", "yes")
+
+# Biological-style learning: sleep_phase (consolidation + replay) every N interactions.
+# DEFAULT OFF: adds latency. Set RAIN_BIOLOGICAL_SLEEP_EVERY_N > 0 to enable.
+BIOLOGICAL_SLEEP_EVERY_N_INTERACTIONS = int(os.getenv("RAIN_BIOLOGICAL_SLEEP_EVERY_N", "0").strip() or "0")
+
+# Moonshot pipeline: ideation -> feasibility -> validation design.
+# DEFAULT OFF: multiple parallel LLM calls per invocation.
+# MOONSHOT_REQUIRE_APPROVAL stays True — never auto-execute moonshot steps.
+MOONSHOT_ENABLED = os.getenv("RAIN_MOONSHOT_ENABLED", "false").lower() in ("true", "1", "yes")
 MOONSHOT_MAX_IDEAS = max(1, min(20, int(os.getenv("RAIN_MOONSHOT_MAX_IDEAS", "5").strip() or "5")))
 MOONSHOT_REQUIRE_APPROVAL = os.getenv("RAIN_MOONSHOT_REQUIRE_APPROVAL", "true").lower() in ("true", "1", "yes")
 MOONSHOT_DATA_DIR = DATA_DIR / "moonshot"
-# Moonshot diversity: when true, ideation uses diverse strategies (wild vs conservative, tech vs policy) to avoid mode collapse.
 MOONSHOT_DIVERSE_IDEATION = os.getenv("RAIN_MOONSHOT_DIVERSE_IDEATION", "true").lower() in ("true", "1", "yes")
-# Moonshot parallel feasibility: when true, run feasibility checks for all ideas in parallel (concurrent).
 MOONSHOT_PARALLEL_FEASIBILITY = os.getenv("RAIN_MOONSHOT_PARALLEL_FEASIBILITY", "true").lower() in ("true", "1", "yes")
 # Session world model: inject recent turn summaries so Rain is not stateless (per-session, in-memory)
 SESSION_WORLD_MODEL_ENABLED = os.getenv("RAIN_SESSION_WORLD_MODEL", "true").lower() in ("true", "1", "yes")
@@ -327,13 +349,26 @@ PROVENANCE_TIER3 = os.getenv("RAIN_PROVENANCE_TIER3", "true").lower() in ("true"
 MEMORY_REASONING_TIER3 = os.getenv("RAIN_MEMORY_REASONING_TIER3", "true").lower() in ("true", "1", "yes")
 TEMPORAL_TIER3 = os.getenv("RAIN_TEMPORAL_TIER3", "true").lower() in ("true", "1", "yes")
 
-# --- Post Tier 1–3: “three frontiers” (unification + completeness + global coherence) ---
-# Unification layer: combine (scoped) logic + probability + causality + utility into one pass for scoring + selection.
-UNIFICATION_LAYER_ENABLED = os.getenv("RAIN_UNIFICATION_LAYER", "true").lower() in ("true", "1", "yes")
-# Completeness expansion: widen proof fragment + broaden search envelopes (still bounded by budgets).
-COMPLETENESS_EXPANSION_ENABLED = os.getenv("RAIN_COMPLETENESS_EXPANSION", "true").lower() in ("true", "1", "yes")
-# Global coherence engine: contradiction resolution + bounded belief propagation across stored beliefs.
+# --- Post Tier 1–3: "three frontiers" ---
+# These add LLM calls per response. Default OFF — enable with ablation evidence.
+# Unification layer: combine logic + probability + causality + utility scoring.
+UNIFICATION_LAYER_ENABLED = os.getenv("RAIN_UNIFICATION_LAYER", "false").lower() in ("true", "1", "yes")
+# Completeness expansion: widen proof fragment + broaden search envelopes.
+COMPLETENESS_EXPANSION_ENABLED = os.getenv("RAIN_COMPLETENESS_EXPANSION", "false").lower() in ("true", "1", "yes")
+# Global coherence engine: contradiction resolution + bounded belief propagation.
+# Kept TRUE: this is safety-relevant (prevents contradictory beliefs from both entering context).
 GLOBAL_COHERENCE_ENABLED = os.getenv("RAIN_GLOBAL_COHERENCE", "true").lower() in ("true", "1", "yes")
+
+# --- Novel reasoning enhancements ---
+# Hypothesis generation: generate competing hypotheses for analytical/design prompts,
+# rank by confidence, inject the best into reasoning context before final answer.
+HYPOTHESIS_GENERATION_ENABLED = os.getenv("RAIN_HYPOTHESIS_GENERATION", "true").lower() in ("true", "1", "yes")
+# Knowledge gap detection: before answering, identify missing information; halt if
+# critical gaps are too large, otherwise append a note to the answer.
+KNOWLEDGE_GAP_DETECTION_ENABLED = os.getenv("RAIN_KNOWLEDGE_GAP", "true").lower() in ("true", "1", "yes")
+# Cross-domain analogy: retrieve structurally similar patterns from other fields in memory
+# and inject as context — primary source of novel, non-obvious insights.
+CROSS_DOMAIN_ANALOGY_ENABLED = os.getenv("RAIN_CROSS_DOMAIN_ANALOGY", "true").lower() in ("true", "1", "yes")
 
 
 # --- Advance Stack (opt-in; additive; default off) ---

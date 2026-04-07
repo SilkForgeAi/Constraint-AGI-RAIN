@@ -6,6 +6,7 @@ Phase 1: Core mind + tools + memory + safety
 from __future__ import annotations
 
 import os
+import time
 from collections.abc import Callable, Iterator
 from typing import TYPE_CHECKING, Any
 
@@ -59,6 +60,7 @@ from rain.config import (
     COT_ENABLED,
     COT_VERIFY_PASS,
     DEEP_REASONING_PATHS,
+    DEEP_REASONING_MAX_TOKENS_PER_PATH,
     AUTO_HARD_MODE,
     MATH_VERIFY_ENABLED,
     EPISTEMIC_GATE_ENABLED,
@@ -75,6 +77,8 @@ from rain.config import (
     MAX_HISTORY_TURNS,
     MAX_RESPONSE_TOKENS,
     ATTEMPT_MAX_RESPONSE_TOKENS,
+    CONTINUATION_MAX_SECONDS,
+    CONTINUATION_MAX_STEPS,
     MEMORY_RETRIEVAL_TOP_K,
     METACOG_ENABLED,
     RAG_ALWAYS_INJECT,
@@ -115,6 +119,9 @@ from rain.config import (
     SYMBOLIC_THINK_ENABLED,
     SYMBOLIC_THINK_ON_CRITICAL,
     SYMBOLIC_THINK_MAX_NODES,
+    HYPOTHESIS_GENERATION_ENABLED,
+    KNOWLEDGE_GAP_DETECTION_ENABLED,
+    CROSS_DOMAIN_ANALOGY_ENABLED,
 )
 try:
     from rain.config import (
@@ -623,6 +630,15 @@ class Rain:
         memory_ctx = self.memory.get_context_for_query(
             prompt, max_experiences=top_k, namespace=namespace,
         )
+        if CROSS_DOMAIN_ANALOGY_ENABLED and not SPEED_PRIORITY:
+            try:
+                from rain.memory.cross_domain import find_cross_domain_analogies, format_analogies_for_context
+                analogies = find_cross_domain_analogies(self.memory, prompt, top_k=3, namespace=namespace)
+                if analogies:
+                    analogy_ctx = format_analogies_for_context(analogies)
+                    memory_ctx = (memory_ctx + "\n\n" + analogy_ctx) if memory_ctx else analogy_ctx
+            except Exception:
+                pass
         if td is not None:
             if getattr(td, "knowledge_fragment", ""):
                 kf = td.knowledge_fragment
@@ -893,6 +909,23 @@ class Rain:
             except Exception:
                 pass
 
+        if HYPOTHESIS_GENERATION_ENABLED and not SPEED_PRIORITY and needs_deep_reasoning(prompt):
+            try:
+                from rain.reasoning.hypothesis import generate_hypotheses, format_hypotheses_for_context, is_hypothesis_worthy
+                if is_hypothesis_worthy(prompt):
+                    hypotheses = generate_hypotheses(
+                        self.engine,
+                        prompt[:400],
+                        context=(memory_ctx or "")[:400],
+                        n=3,
+                    )
+                    if hypotheses:
+                        hyp_ctx = format_hypotheses_for_context(hypotheses)
+                        content = content + "\n\n" + hyp_ctx
+                        messages = [{"role": "system", "content": system}, *history, {"role": "user", "content": content}]
+            except Exception:
+                pass
+
         if COT_ENABLED and needs_deep_reasoning(prompt) and memory_ctx:
             try:
                 from rain.reasoning.general import reason_explain
@@ -911,6 +944,9 @@ class Rain:
             effective_paths = DEEP_REASONING_PATHS if DEEP_REASONING_PATHS >= 2 else (2 if (AUTO_HARD_MODE and is_hard_reasoning_query(prompt)) else 0)
             if is_critical_prompt(prompt):
                 effective_paths = max(effective_paths, 2)
+            # Long strategic prompts can timeout on cloud providers when fanned out.
+            if len((prompt or "").strip()) > 320:
+                effective_paths = min(effective_paths, 1)
             if _is_attempt_requested_prompt(prompt):
                 effective_paths = 1
             budget = max(1024, MAX_RESPONSE_TOKENS)
@@ -918,6 +954,8 @@ class Rain:
             if _is_attempt_requested_prompt(prompt):
                 budget = max(budget, attempt_cap)
             max_tokens_path = max(1024, min(attempt_cap, budget // max(1, effective_paths)))
+            if not _is_attempt_requested_prompt(prompt):
+                max_tokens_path = min(max_tokens_path, DEEP_REASONING_MAX_TOKENS_PER_PATH)
             if effective_paths >= 2:
                 symbolic = self._run_symbolic_node_reasoning(
                     prompt, memory_ctx, messages, max_tokens=max_tokens_path, force=False
@@ -932,7 +970,21 @@ class Rain:
                         beam_width=min(effective_paths, 3), max_depth=2,
                         max_tokens_per_path=max_tokens_path,
                     )
-                return multi_path_reasoning(self.engine, messages, num_paths=effective_paths, max_tokens_per_path=max_tokens_path, prompt=prompt, constraints=constraints, goal=self.goal_stack.current_goal())
+                try:
+                    return multi_path_reasoning(
+                        self.engine,
+                        messages,
+                        num_paths=effective_paths,
+                        max_tokens_per_path=max_tokens_path,
+                        prompt=prompt,
+                        constraints=constraints,
+                        goal=self.goal_stack.current_goal(),
+                    )
+                except Exception as e:
+                    # Network timeouts on one path should not fail the whole turn.
+                    if "timeout" not in str(e).lower():
+                        raise
+                    return self.engine.complete(messages, temperature=0.4, max_tokens=1024)
             else:
                 draft = self.engine.complete(messages, temperature=0.5, max_tokens=max_tokens_path)
                 refine_msgs = messages + [
@@ -952,11 +1004,23 @@ class Rain:
             )
             if symbolic:
                 return symbolic
+        elif (
+            SYMBOLIC_THINK_ENABLED
+            and SYMBOLIC_TREE_PLANNING
+            and constraints
+            and not SPEED_PRIORITY
+            and not _is_attempt_requested_prompt(prompt)
+        ):
+            symbolic = self._run_symbolic_node_reasoning(
+                prompt, memory_ctx, messages, max_tokens=1024, force=False
+            )
+            if symbolic:
+                return symbolic
         elif SPEED_PRIORITY:
-            _stream_tok = max(1024, ATTEMPT_MAX_RESPONSE_TOKENS) if _is_attempt_requested_prompt(prompt) else 1024
+            _stream_tok = max(MAX_RESPONSE_TOKENS, ATTEMPT_MAX_RESPONSE_TOKENS) if _is_attempt_requested_prompt(prompt) else MAX_RESPONSE_TOKENS
             return "".join(self.engine.complete_stream(messages, temperature=0.6, max_tokens=_stream_tok)).strip()
         else:
-            _fallback_tok = max(1024, ATTEMPT_MAX_RESPONSE_TOKENS) if _is_attempt_requested_prompt(prompt) else 1024
+            _fallback_tok = max(MAX_RESPONSE_TOKENS, ATTEMPT_MAX_RESPONSE_TOKENS) if _is_attempt_requested_prompt(prompt) else MAX_RESPONSE_TOKENS
             return self.engine.complete(messages, temperature=0.6, max_tokens=_fallback_tok)
 
     def _verify_and_gate(
@@ -998,7 +1062,7 @@ class Rain:
                     {"role": "assistant", "content": response},
                     {"role": "user", "content": f"Your previous response had issues: {note}. Please correct and try again. Output only the improved response."},
                 ]
-                response = self.engine.complete(retry_msgs, temperature=0.3, max_tokens=1024)
+                response = self.engine.complete(retry_msgs, temperature=0.3, max_tokens=MAX_RESPONSE_TOKENS)
 
                 _note_l = (note or "").lower()
                 _needs_logical_audit = any(k in _note_l for k in (
@@ -1016,7 +1080,7 @@ class Rain:
                             ),
                         },
                     ]
-                    response = self.engine.complete(audit_msgs, temperature=0.2, max_tokens=1024)
+                    response = self.engine.complete(audit_msgs, temperature=0.2, max_tokens=MAX_RESPONSE_TOKENS)
 
                 if is_critical_prompt(prompt):
                     ok2, note2 = verify_response(self.engine, prompt, response)
@@ -1052,7 +1116,7 @@ class Rain:
                             {"role": "assistant", "content": response},
                             {"role": "user", "content": f"Math check: {note} Please correct and output the improved response."},
                         ]
-                        response = self.engine.complete(retry_msgs, temperature=0.3, max_tokens=1024)
+                        response = self.engine.complete(retry_msgs, temperature=0.3, max_tokens=MAX_RESPONSE_TOKENS)
             except Exception:
                 pass
 
@@ -1096,7 +1160,30 @@ class Rain:
                             {"role": "assistant", "content": response},
                             {"role": "user", "content": f"Proof check failed: {msg}. Correct the proof steps and output the improved response."},
                         ]
-                        response = self.engine.complete(retry_msgs, temperature=0.3, max_tokens=1024)
+                        response = self.engine.complete(retry_msgs, temperature=0.3, max_tokens=MAX_RESPONSE_TOKENS)
+                        # High-stakes proofs: force one more strict pass grounded to exact numeric checks.
+                        if is_critical_prompt(prompt):
+                            strict_msgs = messages + [
+                                {"role": "assistant", "content": response},
+                                {
+                                    "role": "user",
+                                    "content": (
+                                        "Perform a strict proof audit. Keep only valid steps. "
+                                        "For any numeric equality, compute exactly and correct it. "
+                                        "Output only the corrected proof."
+                                    ),
+                                },
+                            ]
+                            response = self.engine.complete(strict_msgs, temperature=0.2, max_tokens=MAX_RESPONSE_TOKENS)
+                            try:
+                                from rain.reasoning.exact_math import substitute_exact_math
+
+                                def _calc(expr):
+                                    return self.tools.execute("calc", expression=expr)
+
+                                response = substitute_exact_math(prompt, response, _calc)
+                            except Exception:
+                                pass
         except Exception:
             pass
 
@@ -1110,9 +1197,32 @@ class Rain:
                         {"role": "assistant", "content": response},
                         {"role": "user", "content": f"Your response did not clearly address these constraints: {', '.join(missing[:5])}. Please revise and ensure each is satisfied or state why not."},
                     ]
-                    response = self.engine.complete(retry_msgs, temperature=0.3, max_tokens=1024)
+                    response = self.engine.complete(retry_msgs, temperature=0.3, max_tokens=MAX_RESPONSE_TOKENS)
         except Exception:
             pass
+
+        if KNOWLEDGE_GAP_DETECTION_ENABLED and not SPEED_PRIORITY and needs_deep_reasoning(prompt):
+            try:
+                from rain.reasoning.knowledge_gap import (
+                    detect_knowledge_gaps,
+                    should_request_clarification,
+                    format_clarification_request,
+                    format_gap_note,
+                )
+                gaps = detect_knowledge_gaps(
+                    self.engine,
+                    prompt[:400],
+                    context=(memory_ctx or "")[:400],
+                )
+                if gaps:
+                    if should_request_clarification(gaps):
+                        response = format_clarification_request(gaps)
+                    else:
+                        note = format_gap_note(gaps)
+                        if note:
+                            response = response + "\n\n" + note
+            except Exception:
+                pass
 
         return response, _verify_ran, _verify_ok
 
@@ -1153,16 +1263,10 @@ class Rain:
             except Exception:
                 pass
 
-        _structured_parts = bool(re.search(r"#\s*part\s*\d+", (response or ""), re.I))
-        _continuation_eligible = (
-            _is_attempt_requested_prompt(prompt)
-            or _is_structured_cross_domain_invention_prompt(prompt)
-            or (
-                needs_deep_reasoning(prompt)
-                and len((prompt or "").strip()) > 200
-                and _structured_parts
-            )
-        )
+        # Continuation eligible for ALL non-trivial responses — let _looks_truncated be the gate.
+        # Previously this was restricted to specific prompt types, causing regular long responses
+        # to be silently cut off in the terminal.
+        _continuation_eligible = bool((response or "").strip())
         if (
             not SPEED_PRIORITY
             and _continuation_eligible
@@ -1206,7 +1310,10 @@ class Rain:
             if _looks_truncated(response):
                 cont_temp = 0.2
                 cont_max = max(1024, ATTEMPT_MAX_RESPONSE_TOKENS)
-                for _ in range(10):
+                cont_deadline = time.monotonic() + CONTINUATION_MAX_SECONDS
+                for _ in range(CONTINUATION_MAX_STEPS):
+                    if time.monotonic() >= cont_deadline:
+                        break
                     assistant_tail = response[-3000:]
                     cont_msgs = messages + [
                         {"role": "assistant", "content": assistant_tail},
